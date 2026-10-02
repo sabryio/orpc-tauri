@@ -334,6 +334,13 @@ export class TauriLink<TContext = unknown> {
   ): Promise<string> {
     const args = input === undefined ? {} : { input };
     const response = await invoke<StreamResponse>(commandName, args);
+
+    if (!response.stream_id) {
+      throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
+        message: `Stream command ${commandName} did not return stream_id`,
+      });
+    }
+
     return response.stream_id;
   }
 
