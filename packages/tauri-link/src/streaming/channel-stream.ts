@@ -19,6 +19,9 @@ export interface SseEvent<T = unknown> {
   data?: T;
 }
 
+// Symbol for ORPC event metadata (matches @standard-server/core)
+const EVENT_META_SYMBOL = Symbol.for("STANDARD_SERVER_EVENT_META");
+
 export class ChannelStreamHandler {
   async *createStream<T>(
     commandName: string,
@@ -40,16 +43,26 @@ export class ChannelStreamHandler {
         iterator.push({ type: "done" });
       } else if (message.event === "message" && message.data !== undefined) {
         // Data event - push to iterator
-        // Store event metadata on the value for getEventMeta() support
-        const value = message.data as T & {
-          __sse_event?: string;
-          __sse_id?: string;
-          __sse_retry?: number;
-        };
+        // Store ORPC EventMeta using the standard Symbol
+        const value = message.data as T;
         if (typeof value === "object" && value !== null) {
-          if (message.event) value.__sse_event = message.event;
-          if (message.id) value.__sse_id = message.id;
-          if (message.retry) value.__sse_retry = message.retry;
+          const meta: {
+            id?: string;
+            retry?: number;
+            comments?: string[];
+          } = {};
+
+          if (message.id) meta.id = message.id;
+          if (message.retry) meta.retry = message.retry;
+          if (message.comment) meta.comments = [message.comment];
+
+          // Attach metadata using the Symbol that getEventMeta() looks for
+          Object.defineProperty(value, EVENT_META_SYMBOL, {
+            value: meta,
+            enumerable: false,
+            writable: false,
+            configurable: true,
+          });
         }
         iterator.push({ type: "value", value });
       } else if (message.comment !== undefined) {

@@ -7,7 +7,7 @@ import { Label } from "@tauri-orpc-contract/ui/components/label";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { client, isDefinedError, orpc } from "@/rpc";
+import { client, getEventMeta, isDefinedError, orpc } from "@/rpc";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
@@ -303,16 +303,40 @@ function HomeComponent() {
             {streamEvents.length > 0 && (
               <div className="space-y-2">
                 <p className="font-semibold">Received Events:</p>
-                {streamEvents.map((event, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-md">
-                    <p className="text-sm">
-                      <strong>Message:</strong> {event.message}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Count:</strong> {event.count}
-                    </p>
-                  </div>
-                ))}
+                {streamEvents.map((event, index) => {
+                  // Get SSE event metadata (id, retry, comments)
+                  const meta = getEventMeta(event);
+                  return (
+                    <div key={index} className="p-3 bg-muted rounded-md">
+                      <p className="text-sm">
+                        <strong>Message:</strong> {event.message}
+                      </p>
+                      <p className="text-sm">
+                        <strong>Count:</strong> {event.count}
+                      </p>
+                      {meta && (
+                        <>
+                          {meta.id && (
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Event ID:</strong> {meta.id}
+                            </p>
+                          )}
+                          {meta.retry && (
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Retry:</strong> {meta.retry}ms
+                            </p>
+                          )}
+                          {meta.comments && meta.comments.length > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Comments:</strong>{" "}
+                              {meta.comments.join(", ")}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -332,16 +356,40 @@ function HomeComponent() {
             {channelStreamEvents.length > 0 && (
               <div className="space-y-2">
                 <p className="font-semibold">Received Channel Events:</p>
-                {channelStreamEvents.map((event, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-md">
-                    <p className="text-sm">
-                      <strong>Message:</strong> {event.message}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Count:</strong> {event.count}
-                    </p>
-                  </div>
-                ))}
+                {channelStreamEvents.map((event, index) => {
+                  // Get SSE event metadata (id, retry, comments)
+                  const meta = getEventMeta(event);
+                  return (
+                    <div key={index} className="p-3 bg-muted rounded-md">
+                      <p className="text-sm">
+                        <strong>Message:</strong> {event.message}
+                      </p>
+                      <p className="text-sm">
+                        <strong>Count:</strong> {event.count}
+                      </p>
+                      {meta && (
+                        <>
+                          {meta.id && (
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Event ID:</strong> {meta.id}
+                            </p>
+                          )}
+                          {meta.retry && (
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Retry:</strong> {meta.retry}ms
+                            </p>
+                          )}
+                          {meta.comments && meta.comments.length > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              <strong>Comments:</strong>{" "}
+                              {meta.comments.join(", ")}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
