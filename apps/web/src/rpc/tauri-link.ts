@@ -2,6 +2,17 @@ import { ORPCError } from "@orpc/client";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+interface ORPCMeta {
+  meta?: {
+    "~openapi"?: OpenAPIMeta;
+  };
+  outputSchemas?: unknown[];
+}
+
 interface OpenAPIMeta {
   path?: string;
   method?: string;
@@ -14,294 +25,71 @@ interface TauriErrorPayload {
   data?: unknown;
 }
 
-export class TauriLink<TContext = unknown> {
-  private contract: any;
-  private commandNames: Set<string> = new Set();
+interface StreamResponse {
+  stream_id: string;
+}
 
-  constructor(contract: any) {
-    this.contract = contract;
-    this.validateUniqueCommandNames();
-  }
+interface CallOptions<TContext> {
+  context?: TContext;
+  signal?: AbortSignal;
+}
 
-  /**
-   * Validate that all command names in the contract are unique
-   * Throws an error if duplicate command names are found
-   */
-  private validateUniqueCommandNames(): void {
-    const commandNames = new Map<string, string[]>();
+type StreamEvent<T> =
+  | { type: "value"; value: T }
+  | { type: "done" }
+  | { type: "error"; error: Error };
 
-    const extractCommands = (obj: any, path: string[] = []): void => {
-      if (!obj || typeof obj !== "object") return;
+// ============================================================================
+// Stream Iterator
+// ============================================================================
 
-      // Check if this is a procedure (has ~orpc metadata)
-      if (obj["~orpc"]?.meta?.["~openapi"]?.path) {
-        const commandName = this.getCommandNameFromPath(
-          obj["~orpc"].meta["~openapi"].path,
-        );
-        const procedurePath = path.join(".");
+class StreamIterator<T> {
+  private queue: StreamEvent<T>[] = [];
+  private waiting: ((item: StreamEvent<T>) => void) | null = null;
+  private finished = false;
+  private readonly unlisten: UnlistenFn[] = [];
 
-        if (commandNames.has(commandName)) {
-          const existingPath = commandNames.get(commandName)!.join(".");
-          throw new Error(
-            `[TauriLink] Duplicate command name detected: "${commandName}"\n` +
-              `  - First defined at: ${existingPath}\n` +
-              `  - Duplicate found at: ${procedurePath}\n` +
-              `Each Tauri command must have a unique OpenAPI path.`,
-          );
-        }
-
-        commandNames.set(commandName, path);
-        this.commandNames.add(commandName);
-      }
-
-      // Recursively check nested objects
-      for (const [key, value] of Object.entries(obj)) {
-        if (key !== "~orpc" && typeof value === "object" && value !== null) {
-          extractCommands(value, [...path, key]);
-        }
-      }
-    };
-
-    extractCommands(this.contract);
-
-    console.log(
-      `[TauriLink] Validated ${this.commandNames.size} unique command(s):`,
-      Array.from(this.commandNames).sort(),
-    );
-  }
-
-  /**
-   * Extract command name from OpenAPI path (removes leading slash)
-   */
-  private getCommandNameFromPath(path: string): string {
-    return path.startsWith("/") ? path.substring(1) : path;
-  }
-
-  async call<TInput, TOutput>(
-    path: string[],
-    input: TInput,
-    callOptions?: { context?: TContext; signal?: AbortSignal },
-  ): Promise<TOutput> {
-    const commandName = this.extractCommandName(path);
-
-    if (callOptions?.signal?.aborted) {
-      throw new ORPCError("INTERNAL_ERROR", {
-        message: "Request aborted",
-      });
-    }
-
-    // Check if this procedure returns an async iterator (streaming)
-    const procedure = this.resolveProcedure(path);
-    const isStreaming = this.isStreamingProcedure(procedure, path);
-
-    try {
-      if (isStreaming) {
-        // Return an async iterator for streaming procedures
-        return this.createStreamIterator<TOutput>(
-          commandName,
-          input,
-        ) as TOutput;
-      }
-
-      // Regular request-response
-      const args =
-        input === undefined ? {} : { input: input === null ? null : input };
-
-      const response = await invoke<TOutput>(commandName, args);
-
-      return response;
-    } catch (error) {
-      console.error(`[TauriLink] ${commandName} error:`, error);
-
-      // If Tauri returned a structured oRPC error from Rust, convert to ORPCError
-      if (this.isTauriORPCError(error)) {
-        // Create ORPCError and mark it as defined if Rust indicated it was
-        const orpcError = new ORPCError(error.code as any, {
-          message: error.message || "Unknown error",
-          data: error.data,
-        });
-
-        // Mark the error as defined if Rust sent defined: true
-        // This is used by isDefinedError() to determine if the error matches the contract
-        if (error.defined === true) {
-          Object.defineProperty(orpcError, "defined", {
-            value: true,
-            writable: false,
-            enumerable: true,
-            configurable: false,
-          });
-        }
-
-        console.log("[TauriLink] Created ORPCError:", {
-          code: orpcError.code,
-          defined: error.defined,
-        });
-        throw orpcError;
-      }
-
-      if (error instanceof ORPCError) {
-        throw error;
-      }
-
-      throw new ORPCError("INTERNAL_ERROR", {
-        message: error instanceof Error ? error.message : "Tauri invoke failed",
-        cause: error,
-      });
+  push(item: StreamEvent<T>): void {
+    if (this.waiting) {
+      const resolve = this.waiting;
+      this.waiting = null;
+      resolve(item);
+    } else {
+      this.queue.push(item);
     }
   }
 
-  /**
-   * Resolve a procedure from the contract by path
-   */
-  private resolveProcedure(path: string[]): any {
-    let target = this.contract;
-
-    for (const segment of path) {
-      target = target[segment];
-      if (!target) {
-        return null;
-      }
+  async dequeue(): Promise<StreamEvent<T>> {
+    if (this.queue.length > 0) {
+      return this.queue.shift()!;
     }
-
-    return target;
+    if (this.finished) {
+      return { type: "done" };
+    }
+    return new Promise<StreamEvent<T>>((resolve) => {
+      this.waiting = resolve;
+    });
   }
 
-  /**
-   * Check if a procedure returns an AsyncIteratorObject (streaming)
-   * Checks the schema's ~standard metadata for the ORPC async iterator symbol
-   */
-  private isStreamingProcedure(procedure: any, path: string[]): boolean {
-    if (!procedure || !procedure["~orpc"]) {
-      return false;
-    }
-
-    const orpcMeta = procedure["~orpc"];
-    const outputSchemas = orpcMeta?.outputSchemas;
-
-    if (!outputSchemas || outputSchemas.length === 0) {
-      return false;
-    }
-
-    const outputSchema = outputSchemas[0];
-    const standard = outputSchema?.["~standard"];
-
-    if (!standard) {
-      return false;
-    }
-
-    // Check for the ORPC_ASYNC_ITERATOR_OBJECT_SCHEMA_DETAILS symbol on ~standard
-    // This symbol is added by asyncIteratorObject() in the contract
-    const symbols = Object.getOwnPropertySymbols(standard);
-    const hasAsyncIteratorSymbol = symbols.some((sym) =>
-      sym.toString().includes("ORPC_ASYNC_ITERATOR_OBJECT_SCHEMA_DETAILS"),
-    );
-
-    return hasAsyncIteratorSymbol;
+  markFinished(): void {
+    this.finished = true;
   }
 
-  /**
-   * Create an async iterator for streaming Tauri commands
-   * Generates a unique stream ID, invokes the command, and listens for events
-   */
-  private async *createStreamIterator<T>(
-    commandName: string,
-    input?: unknown,
-  ): AsyncIterableIterator<T> {
-    type QueueItem =
-      | { type: "value"; value: T }
-      | { type: "done" }
-      | { type: "error"; error: Error };
-
-    const queue: QueueItem[] = [];
-    let waiting: ((item: QueueItem) => void) | null = null;
-    let finished = false;
-    const unlisten: UnlistenFn[] = [];
-
-    function push(item: QueueItem) {
-      if (waiting) {
-        const resolve = waiting;
-        waiting = null;
-        resolve(item);
-      } else {
-        queue.push(item);
-      }
-    }
-
-    function dequeue(): Promise<QueueItem> {
-      if (queue.length > 0) {
-        return Promise.resolve(queue.shift()!);
-      }
-      if (finished) {
-        return Promise.resolve({ type: "done" });
-      }
-      return new Promise<QueueItem>((resolve) => {
-        waiting = resolve;
-      });
-    }
-
-    try {
-      // First, invoke the command to get the stream ID from Rust
-      const args = input === undefined ? {} : { input };
-
-      const response = await invoke<{ stream_id: string }>(commandName, args);
-      const streamId = response.stream_id;
-
-      // Setup event listeners with stream-specific event names
-      const dataEventName = `stream:${streamId}:data`;
-      const doneEventName = `stream:${streamId}:done`;
-      const errorEventName = `stream:${streamId}:error`;
-
-      const unlistenData = await listen<T>(dataEventName, (event) => {
-        push({ type: "value", value: event.payload });
-      });
-      unlisten.push(unlistenData);
-
-      const unlistenDone = await listen(doneEventName, () => {
-        finished = true;
-        push({ type: "done" });
-      });
-      unlisten.push(unlistenDone);
-
-      const unlistenError = await listen<TauriErrorPayload>(
-        errorEventName,
-        (event) => {
-          finished = true;
-          const error = this.isTauriORPCError(event.payload)
-            ? new ORPCError(event.payload.code as any, {
-                message: event.payload.message || "Stream error",
-                data: event.payload.data,
-              })
-            : new ORPCError("INTERNAL_ERROR", {
-                message: "Stream error occurred",
-              });
-          push({ type: "error", error });
-        },
-      );
-      unlisten.push(unlistenError);
-
-      // Yield values as they arrive
-      while (true) {
-        const item = await dequeue();
-        if (item.type === "value") {
-          yield item.value;
-        } else if (item.type === "error") {
-          throw item.error;
-        } else {
-          // done
-          break;
-        }
-      }
-    } finally {
-      // Cleanup listeners
-      unlisten.forEach((fn) => fn());
-    }
+  addUnlisten(fn: UnlistenFn): void {
+    this.unlisten.push(fn);
   }
 
-  /**
-   * Type guard to check if an error from Tauri is a structured ORPC error
-   * (as opposed to a generic Tauri error, network error, etc.)
-   */
-  private isTauriORPCError(error: unknown): error is TauriErrorPayload {
+  cleanup(): void {
+    this.unlisten.forEach((fn) => fn());
+  }
+}
+
+// ============================================================================
+// Error Handler
+// ============================================================================
+
+class ErrorHandler {
+  static isTauriORPCError(error: unknown): error is TauriErrorPayload {
     return (
       typeof error === "object" &&
       error !== null &&
@@ -312,31 +100,267 @@ export class TauriLink<TContext = unknown> {
     );
   }
 
-  private extractCommandName(path: string[]): string {
-    let target = this.contract;
+  static toORPCError(error: unknown, context: string): ORPCError<string, unknown> {
+    if (this.isTauriORPCError(error)) {
+      const orpcError = new ORPCError<string, unknown>(
+        error.code || "INTERNAL_ERROR",
+        {
+          message: error.message || "Unknown error",
+          data: error.data,
+        },
+      );
 
-    for (const segment of path) {
-      target = target[segment];
-      if (!target) {
-        throw new ORPCError("INTERNAL_ERROR", {
-          message: `Invalid procedure path: ${path.join(".")}`,
+      if (error.defined === true) {
+        Object.defineProperty(orpcError, "defined", {
+          value: true,
+          writable: false,
+          enumerable: true,
+          configurable: false,
         });
       }
+
+      return orpcError;
     }
 
-    const meta = target["~orpc"]?.meta?.["~openapi"] as OpenAPIMeta | undefined;
-    let commandName = meta?.path;
+    if (error instanceof ORPCError) {
+      return error as ORPCError<string, unknown>;
+    }
 
-    if (!commandName) {
-      throw new ORPCError("INTERNAL_ERROR", {
+    return new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
+      message: error instanceof Error ? error.message : context,
+      cause: error,
+    });
+  }
+}
+
+// ============================================================================
+// Contract Validator
+// ============================================================================
+
+class ContractValidator {
+  private readonly commandNames = new Set<string>();
+
+  validate(contract: Record<string, unknown>): void {
+    const commandMap = new Map<string, string[]>();
+    this.extractCommands(contract, [], commandMap);
+
+    console.log(
+      `[TauriLink] Validated ${this.commandNames.size} unique command(s):`,
+      Array.from(this.commandNames).sort(),
+    );
+  }
+
+  private extractCommands(
+    obj: unknown,
+    path: string[],
+    commandMap: Map<string, string[]>,
+  ): void {
+    if (!obj || typeof obj !== "object") return;
+
+    const orpcMeta = (obj as Record<string, unknown>)["~orpc"] as
+      | ORPCMeta
+      | undefined;
+    const openApiPath = orpcMeta?.meta?.["~openapi"]?.path;
+
+    if (openApiPath) {
+      const commandName = this.normalizeCommandName(openApiPath);
+      const procedurePath = path.join(".");
+
+      if (commandMap.has(commandName)) {
+        const existingPath = commandMap.get(commandName)!.join(".");
+        throw new Error(
+          `[TauriLink] Duplicate command name detected: "${commandName}"\n` +
+            `  - First defined at: ${existingPath}\n` +
+            `  - Duplicate found at: ${procedurePath}\n` +
+            `Each Tauri command must have a unique OpenAPI path.`,
+        );
+      }
+
+      commandMap.set(commandName, path);
+      this.commandNames.add(commandName);
+    }
+
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (key !== "~orpc" && typeof value === "object" && value !== null) {
+        this.extractCommands(value, [...path, key], commandMap);
+      }
+    }
+  }
+
+  private normalizeCommandName(path: string): string {
+    return path.startsWith("/") ? path.substring(1) : path;
+  }
+}
+
+// ============================================================================
+// Procedure Resolver
+// ============================================================================
+
+class ProcedureResolver {
+  constructor(private readonly contract: Record<string, unknown>) {}
+
+  resolve(path: string[]): Record<string, unknown> | null {
+    let target: unknown = this.contract;
+
+    for (const segment of path) {
+      if (!target || typeof target !== "object") return null;
+      target = (target as Record<string, unknown>)[segment];
+      if (!target) return null;
+    }
+
+    return target as Record<string, unknown>;
+  }
+
+  extractCommandName(path: string[]): string {
+    const procedure = this.resolve(path);
+    if (!procedure) {
+      throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
+        message: `Invalid procedure path: ${path.join(".")}`,
+      });
+    }
+
+    const meta = (procedure["~orpc"] as ORPCMeta | undefined)?.meta?.[
+      "~openapi"
+    ];
+    const commandPath = meta?.path;
+
+    if (!commandPath) {
+      throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
         message: `No openapi path found for procedure: ${path.join(".")}`,
       });
     }
 
-    if (commandName.startsWith("/")) {
-      commandName = commandName.substring(1);
+    return commandPath.startsWith("/")
+      ? commandPath.substring(1)
+      : commandPath;
+  }
+
+  isStreaming(path: string[]): boolean {
+    const procedure = this.resolve(path);
+    if (!procedure) return false;
+
+    const orpcMeta = procedure["~orpc"] as ORPCMeta | undefined;
+    if (!orpcMeta) return false;
+
+    const outputSchemas = orpcMeta.outputSchemas;
+    if (!outputSchemas || outputSchemas.length === 0) return false;
+
+    const outputSchema = outputSchemas[0];
+    if (!outputSchema || typeof outputSchema !== "object") return false;
+
+    const standard = (outputSchema as Record<string, unknown>)["~standard"];
+    if (!standard || typeof standard !== "object") return false;
+
+    const symbols = Object.getOwnPropertySymbols(standard);
+    return symbols.some((sym) =>
+      sym.toString().includes("ORPC_ASYNC_ITERATOR_OBJECT_SCHEMA_DETAILS"),
+    );
+  }
+}
+
+// ============================================================================
+// TauriLink
+// ============================================================================
+
+export class TauriLink<TContext = unknown> {
+  private readonly resolver: ProcedureResolver;
+
+  constructor(contract: Record<string, unknown>) {
+    this.resolver = new ProcedureResolver(contract);
+    new ContractValidator().validate(contract);
+  }
+
+  async call<TInput, TOutput>(
+    path: string[],
+    input: TInput,
+    callOptions?: CallOptions<TContext>,
+  ): Promise<TOutput> {
+    const commandName = this.resolver.extractCommandName(path);
+
+    if (callOptions?.signal?.aborted) {
+      throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
+        message: "Request aborted",
+      });
     }
 
-    return commandName;
+    try {
+      if (this.resolver.isStreaming(path)) {
+        return this.createStreamIterator<TOutput>(commandName, input) as TOutput;
+      }
+
+      return await this.invokeCommand<TInput, TOutput>(commandName, input);
+    } catch (error) {
+      throw ErrorHandler.toORPCError(error, `${commandName} failed`);
+    }
+  }
+
+  private async invokeCommand<TInput, TOutput>(
+    commandName: string,
+    input: TInput,
+  ): Promise<TOutput> {
+    const args =
+      input === undefined ? {} : { input: input === null ? null : input };
+    return await invoke<TOutput>(commandName, args);
+  }
+
+  private async *createStreamIterator<T>(
+    commandName: string,
+    input?: unknown,
+  ): AsyncIterableIterator<T> {
+    const iterator = new StreamIterator<T>();
+
+    try {
+      const streamId = await this.startStream(commandName, input);
+      await this.setupStreamListeners(streamId, iterator);
+
+      while (true) {
+        const item = await iterator.dequeue();
+        if (item.type === "value") {
+          yield item.value;
+        } else if (item.type === "error") {
+          throw item.error;
+        } else {
+          break;
+        }
+      }
+    } finally {
+      iterator.cleanup();
+    }
+  }
+
+  private async startStream(
+    commandName: string,
+    input?: unknown,
+  ): Promise<string> {
+    const args = input === undefined ? {} : { input };
+    const response = await invoke<StreamResponse>(commandName, args);
+    return response.stream_id;
+  }
+
+  private async setupStreamListeners<T>(
+    streamId: string,
+    iterator: StreamIterator<T>,
+  ): Promise<void> {
+    const dataEvent = `stream:${streamId}:data`;
+    const doneEvent = `stream:${streamId}:done`;
+    const errorEvent = `stream:${streamId}:error`;
+
+    const unlistenData = await listen<T>(dataEvent, (event) => {
+      iterator.push({ type: "value", value: event.payload });
+    });
+    iterator.addUnlisten(unlistenData);
+
+    const unlistenDone = await listen(doneEvent, () => {
+      iterator.markFinished();
+      iterator.push({ type: "done" });
+    });
+    iterator.addUnlisten(unlistenDone);
+
+    const unlistenError = await listen<TauriErrorPayload>(errorEvent, (event) => {
+      iterator.markFinished();
+      const error = ErrorHandler.toORPCError(event.payload, "Stream error");
+      iterator.push({ type: "error", error });
+    });
+    iterator.addUnlisten(unlistenError);
   }
 }
