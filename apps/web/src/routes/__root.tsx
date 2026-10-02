@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import "../index.css";
 
-export interface RouterAppContext {
+interface RouterAppContext {
   queryClient: QueryClient;
 }
 

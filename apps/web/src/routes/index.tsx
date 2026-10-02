@@ -1,58 +1,32 @@
 import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Card } from "@tauri-orpc-contract/ui/components/card";
-import { Input } from "@tauri-orpc-contract/ui/components/input";
-import { Label } from "@tauri-orpc-contract/ui/components/label";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
+import {
+  Activity, Database, Radio, Zap,
+  Terminal, BarChart3
+} from "lucide-react";
 
 import { client, getEventMeta, isDefinedError, orpc, consumeAsyncIterator } from "@/rpc";
-import { useStreamEvents } from "./use-stream-events";
-import { mutationHandlers } from "./use-mutation-handlers";
+import { useStreamEvents } from "@/hooks/use-stream-events";
+import { mutationHandlers } from "@/hooks/use-mutation-handlers";
+import { OverviewTab } from "./-components/overview-tab";
+import { DataLayerTab } from "./-components/data-layer-tab";
+import { StreamingTab } from "./-components/streaming-tab";
+import { AdvancedTab } from "./-components/advanced-tab";
+import { TitleBar } from "@/components/title-bar";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
-
-function EventCard({ event, index }: { event: { message: string; count: number }; index: number }) {
-  const meta = getEventMeta(event);
-  return (
-    <div key={index} className="p-3 bg-muted rounded-md">
-      <p className="text-sm">
-        <strong>Message:</strong> {event.message}
-      </p>
-      <p className="text-sm">
-        <strong>Count:</strong> {event.count}
-      </p>
-      {meta && (
-        <>
-          {meta.id && (
-            <p className="text-sm text-muted-foreground">
-              <strong>Event ID:</strong> {meta.id}
-            </p>
-          )}
-          {meta.retry && (
-            <p className="text-sm text-muted-foreground">
-              <strong>Retry:</strong> {meta.retry}ms
-            </p>
-          )}
-          {meta.comments && meta.comments.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              <strong>Comments:</strong> {meta.comments.join(", ")}
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
 
 function HomeComponent() {
   const queryClient = useQueryClient();
   const [planetName, setPlanetName] = useState("");
   const [planetDescription, setPlanetDescription] = useState("");
   const [findId, setFindId] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
 
   const stream = useStreamEvents<{ message: string; count: number }>();
   const channelStream = useStreamEvents<{ message: string; count: number }>();
@@ -178,335 +152,155 @@ function HomeComponent() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
-      <div className="grid gap-6">
-        <section>
-          <h1 className="text-3xl font-bold mb-2">oRPC Tauri Test UI</h1>
-          <p className="text-muted-foreground">
-            Testing TauriLink with Tauri IPC commands
-          </p>
-        </section>
-
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Ping Command</h2>
-          <div className="space-y-2">
-            <Button
-              onClick={() => pingQuery.refetch()}
-              disabled={pingQuery.isFetching}
-            >
-              {pingQuery.isFetching ? "Pinging..." : "Ping"}
-            </Button>
-            {pingQuery.data && (
-              <div className="p-4 bg-muted rounded-md">
-                <p>
-                  <strong>ID:</strong> {pingQuery.data.id}
-                </p>
-                <p>
-                  <strong>Message:</strong> {pingQuery.data.message}
-                </p>
-              </div>
-            )}
+    <div className="flex h-screen bg-background flex-col">
+      <TitleBar />
+      <div className="flex flex-1 min-h-0">
+      {/* Sidebar */}
+      <div className="flex-none w-64 border-r border-primary/30 bg-sidebar p-4 flex flex-col">
+        <div className="flex items-center gap-2 mb-8">
+          <Terminal className="h-6 w-6 text-primary glow" />
+          <div>
+            <h1 className="text-lg font-bold tracking-tight text-primary">oRPC_TEST</h1>
+            <p className="text-xs text-muted-foreground">v1.0.0-alpha</p>
           </div>
-        </Card>
+        </div>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Create Planet</h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="planetName">Name</Label>
-              <Input
-                id="planetName"
-                value={planetName}
-                onChange={(e) => setPlanetName(e.target.value)}
-                placeholder="Mars"
-              />
+        <nav className="space-y-1 flex-1">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded transition-all ${
+              activeTab === "overview"
+                ? "bg-primary/20 text-primary border border-primary/50 glow"
+                : "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            }`}
+          >
+            <Activity className="h-4 w-4" />
+            Overview
+          </button>
+
+          <button
+            onClick={() => setActiveTab("data")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded transition-all ${
+              activeTab === "data"
+                ? "bg-primary/20 text-primary border border-primary/50 glow"
+                : "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            }`}
+          >
+            <Database className="h-4 w-4" />
+            Data Layer
+          </button>
+
+          <button
+            onClick={() => setActiveTab("streaming")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded transition-all ${
+              activeTab === "streaming"
+                ? "bg-primary/20 text-primary border border-primary/50 glow"
+                : "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            }`}
+          >
+            <Radio className="h-4 w-4" />
+            Streaming
+          </button>
+
+          <button
+            onClick={() => setActiveTab("advanced")}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded transition-all ${
+              activeTab === "advanced"
+                ? "bg-primary/20 text-primary border border-primary/50 glow"
+                : "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+            }`}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Advanced
+          </button>
+        </nav>
+
+        <div className="pt-4 border-t border-primary/30 space-y-2">
+          <div className="text-xs text-muted-foreground space-y-1">
+            <div className="flex justify-between">
+              <span>Status:</span>
+              <span className="text-success">●</span>
             </div>
-            <div>
-              <Label htmlFor="planetDescription">Description (optional)</Label>
-              <Input
-                id="planetDescription"
-                value={planetDescription}
-                onChange={(e) => setPlanetDescription(e.target.value)}
-                placeholder="The red planet"
-              />
+            <div className="flex justify-between">
+              <span>Latency:</span>
+              <span className="text-primary">~24ms</span>
             </div>
-            <Button
-              onClick={() =>
-                createPlanetMutation.mutate({
-                  name: planetName,
-                  description: planetDescription || undefined,
-                })
-              }
-              disabled={!planetName || createPlanetMutation.isPending}
-            >
-              {createPlanetMutation.isPending ? "Creating..." : "Create Planet"}
-            </Button>
           </div>
-        </Card>
+        </div>
+      </div>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Find Planet by ID</h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="findId">Planet ID</Label>
-              <Input
-                id="findId"
-                type="number"
-                value={findId}
-                onChange={(e) => setFindId(e.target.value)}
-                placeholder="1"
-              />
-            </div>
-            <Button
-              onClick={() =>
-                findPlanetMutation.mutate({ id: Number.parseInt(findId) })
-              }
-              disabled={!findId || findPlanetMutation.isPending}
-            >
-              {findPlanetMutation.isPending ? "Finding..." : "Find Planet"}
-            </Button>
-            {findPlanetMutation.data && (
-              <div className="p-4 bg-muted rounded-md">
-                <p>
-                  <strong>ID:</strong> {findPlanetMutation.data.id}
-                </p>
-                <p>
-                  <strong>Name:</strong> {findPlanetMutation.data.name}
-                </p>
-                {findPlanetMutation.data.description && (
-                  <p>
-                    <strong>Description:</strong>{" "}
-                    {findPlanetMutation.data.description}
-                  </p>
-                )}
-              </div>
-            )}
+      {/* Main Content */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        {/* Header */}
+        <header className="flex-none h-16 border-b border-primary/30 px-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-foreground tracking-tight">
+              {activeTab === "overview" && "System Overview"}
+              {activeTab === "data" && "Data Layer Tests"}
+              {activeTab === "streaming" && "Stream Transport Tests"}
+              {activeTab === "advanced" && "Advanced Patterns"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Testing TauriLink with Tauri IPC
+            </p>
           </div>
-        </Card>
+          <Button
+            onClick={() => pingQuery.refetch()}
+            disabled={pingQuery.isFetching}
+            className="glow-hover"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {pingQuery.isFetching ? "Pinging..." : "Ping"}
+          </Button>
+        </header>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">All Planets</h2>
-          <div className="space-y-4">
-            <Button
-              onClick={() => {
-                console.log("Current planetsQuery.data:", planetsQuery.data);
-                planetsQuery.refetch();
-              }}
-              disabled={planetsQuery.isFetching}
-            >
-              {planetsQuery.isFetching ? "Loading..." : "Refresh List"}
-            </Button>
-            {(() => {
-              console.log("planetsQuery full state:", {
-                data: planetsQuery.data,
-                pages: planetsQuery.data?.pages,
-                error: planetsQuery.error,
-                status: planetsQuery.status,
-              });
-              const allPlanets = planetsQuery.data?.pages?.flatMap(p => {
-                console.log("Page:", p);
-                return p.items || [];
-              }) || [];
-              console.log("All planets:", allPlanets);
-              return allPlanets.length > 0 ? (
-              <div className="space-y-2">
-                {allPlanets.map((planet) => {
-                  console.log("Rendering planet:", planet);
-                  return (
-                  <div
-                    key={planet.id}
-                    className="flex items-center justify-between p-4 bg-muted rounded-md"
-                  >
-                    <div>
-                      <p className="font-semibold">{planet.name}</p>
-                      {planet.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {planet.description}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() =>
-                        deletePlanetMutation.mutate({ id: planet.id })
-                      }
-                      disabled={deletePlanetMutation.isPending}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                  );
-                })}
-                {planetsQuery.hasNextPage && (
-                  <Button
-                    onClick={() => planetsQuery.fetchNextPage()}
-                    disabled={planetsQuery.isFetchingNextPage}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    {planetsQuery.isFetchingNextPage ? "Loading more..." : "Load More"}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <p className="text-muted-foreground">
-                No planets yet. Create one above!
-              </p>
-            );
-            })()}
-          </div>
-        </Card>
+        {/* Content Area */}
+        <main className="flex-1 min-h-0 overflow-auto p-6">
+          {activeTab === "overview" && (
+            <OverviewTab
+              pingQuery={pingQuery}
+              planetsQuery={planetsQuery}
+              onTabChange={setActiveTab}
+            />
+          )}
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Stream Events Test</h2>
-          <div className="space-y-4">
-            <Button onClick={handleStreamEvents} disabled={stream.isStreaming}>
-              {stream.isStreaming ? "Streaming..." : "Start Stream"}
-            </Button>
-            {stream.events.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold">Received Events:</p>
-                {stream.events.map((event, index) => (
-                  <EventCard key={index} event={event} index={index} />
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
+          {activeTab === "data" && (
+            <DataLayerTab
+              planetName={planetName}
+              setPlanetName={setPlanetName}
+              planetDescription={planetDescription}
+              setPlanetDescription={setPlanetDescription}
+              findId={findId}
+              setFindId={setFindId}
+              planetsQuery={planetsQuery}
+              createPlanetMutation={createPlanetMutation}
+              findPlanetMutation={findPlanetMutation}
+              deletePlanetMutation={deletePlanetMutation}
+            />
+          )}
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Channel Stream Test (Tauri Native)
-          </h2>
-          <div className="space-y-4">
-            <Button
-              onClick={handleChannelStreamEvents}
-              disabled={channelStream.isStreaming}
-            >
-              {channelStream.isStreaming ? "Streaming..." : "Start Channel Stream"}
-            </Button>
-            {channelStream.events.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold">Received Channel Events:</p>
-                {channelStream.events.map((event, index) => (
-                  <EventCard key={index} event={event} index={index} />
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
+          {activeTab === "streaming" && (
+            <StreamingTab
+              emitListenEvents={stream.events}
+              isEmitListenStreaming={stream.isStreaming}
+              onStartEmitListen={handleStreamEvents}
+              channelEvents={channelStream.events}
+              isChannelStreaming={channelStream.isStreaming}
+              onStartChannel={handleChannelStreamEvents}
+              asyncEvents={asyncEvents}
+              isAsyncStreaming={asyncStreaming}
+              asyncError={asyncError}
+              asyncFinished={asyncFinished}
+              onStartAsync={handleAsyncIteratorStream}
+              onCancelAsync={handleCancelAsyncStream}
+            />
+          )}
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            Async Iterator Pattern Test
-          </h2>
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Button
-                onClick={handleAsyncIteratorStream}
-                disabled={asyncStreaming}
-              >
-                {asyncStreaming ? "Streaming..." : "Start Async Stream"}
-              </Button>
-              {asyncStreaming && (
-                <Button
-                  onClick={handleCancelAsyncStream}
-                  variant="destructive"
-                >
-                  Cancel
-                </Button>
-              )}
-            </div>
-            {asyncError && (
-              <div className="p-3 bg-destructive/10 text-destructive rounded-md">
-                <strong>Error:</strong> {asyncError}
-              </div>
-            )}
-            {asyncFinished && (
-              <div className="p-3 bg-green-500/10 text-green-500 rounded-md">
-                Stream finished
-              </div>
-            )}
-            {asyncEvents.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold">Received Async Events:</p>
-                {asyncEvents.map((event, index) => (
-                  <div key={index} className="p-3 bg-muted rounded-md">
-                    <p className="text-sm">
-                      <strong>Message:</strong> {event.message}
-                    </p>
-                    <p className="text-sm">
-                      <strong>Count:</strong> {event.count}
-                    </p>
-                    {event.id && (
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Event ID:</strong> {event.id}
-                      </p>
-                    )}
-                    {event.retry && (
-                      <p className="text-sm text-muted-foreground">
-                        <strong>Retry:</strong> {event.retry}ms
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            useQuery Streamed Pattern Test
-          </h2>
-          <div className="space-y-4">
-            <Button
-              onClick={() => streamedQuery.refetch()}
-              disabled={streamedQuery.isFetching}
-            >
-              {streamedQuery.isFetching ? "Streaming..." : "Start Streamed Query"}
-            </Button>
-            {streamedQuery.error && (
-              <div className="p-3 bg-destructive/10 text-destructive rounded-md">
-                <strong>Error:</strong> {String(streamedQuery.error)}
-              </div>
-            )}
-            {streamedQuery.data && streamedQuery.data.length > 0 && (
-              <div className="space-y-2">
-                <p className="font-semibold">Received Query Events ({streamedQuery.data.length}):</p>
-                {streamedQuery.data.map((event, index) => (
-                  <EventCard key={index} event={event} index={index} />
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            useQuery Live Pattern Test (Latest Only)
-          </h2>
-          <div className="space-y-4">
-            <Button
-              onClick={() => liveQuery.refetch()}
-              disabled={liveQuery.isFetching}
-            >
-              {liveQuery.isFetching ? "Streaming..." : "Start Live Query"}
-            </Button>
-            {liveQuery.error && (
-              <div className="p-3 bg-destructive/10 text-destructive rounded-md">
-                <strong>Error:</strong> {String(liveQuery.error)}
-              </div>
-            )}
-            {liveQuery.data && (
-              <div className="space-y-2">
-                <p className="font-semibold">Latest Event:</p>
-                <EventCard event={liveQuery.data} index={0} />
-              </div>
-            )}
-          </div>
-        </Card>
+          {activeTab === "advanced" && (
+            <AdvancedTab streamedQuery={streamedQuery} liveQuery={liveQuery} />
+          )}
+        </main>
+      </div>
       </div>
     </div>
   );
