@@ -49,12 +49,12 @@ export class EventStreamHandler {
   ): Promise<string> {
     // Determine stream ID and parameter name
     const streamId =
-      transportConfig?.kind === "stream" && transportConfig.value
-        ? transportConfig.value
+      transportConfig?.kind === "stream"
+        ? transportConfig.id.value
         : commandName;
 
     const paramName =
-      transportConfig?.kind === "stream" ? transportConfig.name : "streamId";
+      transportConfig?.kind === "stream" ? transportConfig.id.name : "streamId";
 
     // Generate event names using custom config or default strategy
     const eventNames = eventsConfig

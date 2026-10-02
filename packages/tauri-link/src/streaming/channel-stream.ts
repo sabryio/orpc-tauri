@@ -29,8 +29,13 @@ export class ChannelStreamHandler {
 
     try {
       // Determine channel parameter name
-      const paramName =
-        transportConfig?.kind === "channel" ? transportConfig.name : "onEvent";
+      let paramName = "onEvent";
+      if (transportConfig?.kind === "channel") {
+        paramName =
+          typeof transportConfig.id === "string"
+            ? transportConfig.id
+            : transportConfig.id.name;
+      }
 
       // Build args with custom parameter name
       const channelParam = { [paramName]: channel };

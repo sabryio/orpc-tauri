@@ -8,8 +8,8 @@ export type Contract = Record<string, unknown>;
 // ============================================================================
 
 export type TauriTransportConfig =
-  | { kind: "stream"; name: string; value?: string }
-  | { kind: "channel"; name: string };
+  | { kind: "stream"; id: { name: string; value: string } }
+  | { kind: "channel"; id: { name: string } | string };
 
 export type EventNamesConfig = {
   paramName: string; // Parameter name in Rust (e.g., "eventNames", "event_names")

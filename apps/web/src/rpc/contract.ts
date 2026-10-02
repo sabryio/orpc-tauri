@@ -102,8 +102,10 @@ export const contract = {
       .meta(
         tauri.transport({
           kind: "stream",
-          name: camelCase("stream_id"),
-          value: crypto.randomUUID(),
+          id: {
+            name: camelCase("stream_id"),
+            value: crypto.randomUUID(),
+          },
         }),
       )
       .meta(
@@ -117,7 +119,7 @@ export const contract = {
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
       .meta(tauri.command("stream_events_channel"))
-      .meta(tauri.transport({ kind: "channel", name: camelCase("on_event") }))
+      .meta(tauri.transport({ kind: "channel", id: camelCase("on_event") }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },
