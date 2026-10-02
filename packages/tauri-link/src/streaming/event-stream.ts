@@ -2,12 +2,7 @@ import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
 import { handleSseEvent } from "./event-handler";
 import type { SseEvent } from "./sse-types";
-import type {
-  TauriErrorPayload,
-  Logger,
-  TauriTransportConfig,
-  EventNamesConfig,
-} from "../types";
+import type { TauriErrorPayload, Logger, TauriTransportConfig } from "../types";
 import type { ITauriInvoker, ITauriListener } from "../adapters/tauri-adapter";
 import type { EventNameStrategy } from "./event-name-strategy";
 
@@ -23,7 +18,6 @@ export class EventStreamHandler {
     commandName: string,
     input?: unknown,
     transportConfig?: TauriTransportConfig,
-    eventsConfig?: EventNamesConfig,
   ): AsyncIterableIterator<T> {
     const iterator = new StreamIterator<T>();
 
@@ -32,9 +26,8 @@ export class EventStreamHandler {
         commandName,
         input,
         transportConfig,
-        eventsConfig,
       );
-      await this.setupListeners(streamId, iterator, eventsConfig);
+      await this.setupListeners(streamId, iterator, transportConfig);
       yield* this.consumeStream(iterator);
     } finally {
       iterator.cleanup();
@@ -45,28 +38,26 @@ export class EventStreamHandler {
     commandName: string,
     input?: unknown,
     transportConfig?: TauriTransportConfig,
-    eventsConfig?: EventNamesConfig,
   ): Promise<string> {
-    // Determine stream ID and parameter name
-    const streamId =
-      transportConfig?.kind === "stream"
-        ? transportConfig.id.value
-        : commandName;
+    // Only stream transport is valid here
+    if (transportConfig?.kind !== "stream") {
+      throw new Error("EventStreamHandler requires stream transport config");
+    }
 
-    const paramName =
-      transportConfig?.kind === "stream" ? transportConfig.id.name : "streamId";
+    const streamId = transportConfig.id.value;
+    const paramName = transportConfig.id.name;
 
     // Generate event names using custom config or default strategy
-    const eventNames = eventsConfig
-      ? eventsConfig.generator(streamId)
+    const eventNames = transportConfig.events
+      ? transportConfig.events.generator(streamId)
       : this.eventNameStrategy.getEventNames(streamId);
 
-    const eventsParamName = eventsConfig?.paramName ?? "eventNames";
+    const eventsParamName = transportConfig.events?.name ?? "eventNames";
 
     // Build args with stream param and event names
     const streamParam = {
       [paramName]: streamId,
-      [eventsParamName]: eventNames, // ← Custom param name for event names
+      [eventsParamName]: eventNames,
     };
 
     const args =
@@ -95,11 +86,16 @@ export class EventStreamHandler {
   private async setupListeners<T>(
     streamId: string,
     iterator: StreamIterator<T>,
-    eventsConfig?: EventNamesConfig,
+    transportConfig?: TauriTransportConfig,
   ): Promise<void> {
+    // Only stream transport is valid here
+    if (transportConfig?.kind !== "stream") {
+      throw new Error("EventStreamHandler requires stream transport config");
+    }
+
     // Use custom generator or default strategy
-    const events = eventsConfig
-      ? eventsConfig.generator(streamId)
+    const events = transportConfig.events
+      ? transportConfig.events.generator(streamId)
       : this.eventNameStrategy.getEventNames(streamId);
 
     const unlistenData = await this.listener.listen<SseEvent<T>>(

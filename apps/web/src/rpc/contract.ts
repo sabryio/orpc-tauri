@@ -106,14 +106,15 @@ export const contract = {
             name: camelCase("stream_id"),
             value: crypto.randomUUID(),
           },
+          events: {
+            name: camelCase("event_names"),
+            generator: (streamId) => ({
+              data: `stream:${streamId}:data`,
+              done: `stream:${streamId}:done`,
+              error: `stream:${streamId}:error`,
+            }),
+          },
         }),
-      )
-      .meta(
-        tauri.events(camelCase("event_names"), (streamId) => ({
-          data: `stream:${streamId}:data`,
-          done: `stream:${streamId}:done`,
-          error: `stream:${streamId}:error`,
-        })),
       )
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),

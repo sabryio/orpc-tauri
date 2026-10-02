@@ -8,22 +8,23 @@ export type Contract = Record<string, unknown>;
 // ============================================================================
 
 export type TauriTransportConfig =
-  | { kind: "stream"; id: { name: string; value: string } }
+  | {
+      kind: "stream";
+      id: { name: string; value: string };
+      events: {
+        name: string;
+        generator: (streamId: string) => {
+          data: string;
+          done: string;
+          error: string;
+        };
+      };
+    }
   | { kind: "channel"; id: { name: string } | string };
-
-export type EventNamesConfig = {
-  paramName: string; // Parameter name in Rust (e.g., "eventNames", "event_names")
-  generator: (streamId: string) => {
-    data: string;
-    done: string;
-    error: string;
-  };
-};
 
 export interface TauriMeta {
   command: string;
   transport?: TauriTransportConfig;
-  events?: EventNamesConfig;
   timeout?: number;
   debug?: boolean;
   tags?: string[];
