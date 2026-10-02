@@ -102,6 +102,7 @@ export const contract = {
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
+      .meta(tauri())
       .meta(tauri.command("stream_events_channel"))
       .meta(tauri.transport("channel"))
       .input(z.void())

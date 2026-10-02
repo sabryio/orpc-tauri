@@ -14,6 +14,13 @@ function mergeTauriMeta(
     );
   }
 
+  // Prevent overwriting existing command
+  if (incoming.command && current?.command && incoming.command !== current.command) {
+    throw new Error(
+      `[TauriLink] Cannot change command from "${current.command}" to "${incoming.command}". Command can only be set once.`,
+    );
+  }
+
   const tags =
     current?.tags && incoming.tags
       ? [...current.tags, ...incoming.tags]
@@ -44,7 +51,7 @@ function mergeTauriMeta(
 // Main Plugin Function
 // ============================================================================
 
-export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
+export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
   name: "~tauri" as const,
   init(meta: Record<string, unknown>) {
     const existing = meta["~tauri"] as TauriMeta | undefined;
@@ -52,8 +59,8 @@ export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
     return { ...meta, "~tauri": merged };
   },
 })) as {
-  (meta: TauriMeta): MetaPlugin;
-  command(command: TauriMeta["command"]): MetaPlugin;
+  (meta?: Partial<TauriMeta>): MetaPlugin;
+  command(command: string): MetaPlugin;
   transport(transport: TauriMeta["transport"]): MetaPlugin;
   timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
   debug(debug: TauriMeta["debug"]): MetaPlugin;
