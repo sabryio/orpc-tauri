@@ -1,6 +1,7 @@
 import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
-import { attachEventMeta, type SseEvent } from "./sse-types";
+import { handleSseEvent } from "./event-handler";
+import type { SseEvent } from "./sse-types";
 import type { Logger } from "../types";
 import type {
   ITauriInvoker,
@@ -13,6 +14,7 @@ export class ChannelStreamHandler {
     private readonly channelFactory: ITauriChannelFactory,
     private readonly logger: Logger,
   ) {}
+
   async *createStream<T>(
     commandName: string,
     input?: unknown,
@@ -21,19 +23,7 @@ export class ChannelStreamHandler {
     const channel = this.channelFactory.createChannel<SseEvent<T>>();
 
     channel.onmessage = (message) => {
-      if (message.comment === "flush") {
-        this.logger.log(`[ChannelStream] Channel connected for ${commandName}`);
-      } else if (message.event === "close") {
-        this.logger.log(`[ChannelStream] Channel closed for ${commandName}`);
-        iterator.markFinished();
-        iterator.push({ type: "done" });
-      } else if (message.event === "message" && message.data !== undefined) {
-        const value = message.data as T;
-        attachEventMeta(value, message);
-        iterator.push({ type: "value", value });
-      } else if (message.comment !== undefined) {
-        this.logger.log(`[ChannelStream] Keep-alive for ${commandName}`);
-      }
+      handleSseEvent(message, iterator, commandName, this.logger);
     };
 
     try {
@@ -50,18 +40,24 @@ export class ChannelStreamHandler {
         });
       });
 
-      while (true) {
-        const item = await iterator.dequeue();
-        if (item.type === "value") {
-          yield item.value;
-        } else if (item.type === "error") {
-          throw item.error;
-        } else {
-          break;
-        }
-      }
+      yield* this.consumeStream(iterator);
     } finally {
       iterator.cleanup();
+    }
+  }
+
+  private async *consumeStream<T>(
+    iterator: StreamIterator<T>,
+  ): AsyncIterableIterator<T> {
+    while (true) {
+      const item = await iterator.dequeue();
+      if (item.type === "value") {
+        yield item.value;
+      } else if (item.type === "error") {
+        throw item.error;
+      } else {
+        break;
+      }
     }
   }
 }

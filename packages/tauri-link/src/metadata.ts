@@ -4,46 +4,38 @@ import type { TauriMeta, MetaPlugin } from "./types";
 // Merge Logic
 // ============================================================================
 
+function validateCommandChange(
+  incoming: string | undefined,
+  current: string | undefined,
+): void {
+  if (incoming && current && incoming !== current) {
+    throw new Error(
+      `[TauriLink] Cannot change command from "${current}" to "${incoming}". Command can only be set once.`,
+    );
+  }
+}
+
+function mergeArrayField<T>(
+  incomingField: T[] | undefined,
+  currentField: T[] | undefined,
+): T[] | undefined {
+  if (currentField && incomingField) return [...currentField, ...incomingField];
+  return incomingField ?? currentField;
+}
+
 function mergeTauriMeta(
   incoming: TauriMeta,
   current?: TauriMeta,
 ): TauriMeta {
-  // Prevent overwriting existing command
-  if (
-    incoming.command &&
-    current?.command &&
-    incoming.command !== current.command
-  ) {
-    throw new Error(
-      `[TauriLink] Cannot change command from "${current.command}" to "${incoming.command}". Command can only be set once.`,
-    );
-  }
-
-  const tags =
-    current?.tags && incoming.tags
-      ? [...current.tags, ...incoming.tags]
-      : incoming.tags !== undefined
-        ? incoming.tags
-        : current?.tags;
-
-  const permissions =
-    current?.permissions && incoming.permissions
-      ? [...current.permissions, ...incoming.permissions]
-      : incoming.permissions !== undefined
-        ? incoming.permissions
-        : current?.permissions;
+  validateCommandChange(incoming.command, current?.command);
 
   return {
     command: incoming.command ?? current?.command,
-    transport:
-      incoming.transport !== undefined
-        ? incoming.transport
-        : current?.transport,
-    timeout:
-      incoming.timeout !== undefined ? incoming.timeout : current?.timeout,
-    debug: incoming.debug !== undefined ? incoming.debug : current?.debug,
-    tags,
-    permissions,
+    transport: incoming.transport ?? current?.transport,
+    timeout: incoming.timeout ?? current?.timeout,
+    debug: incoming.debug ?? current?.debug,
+    tags: mergeArrayField(incoming.tags, current?.tags),
+    permissions: mergeArrayField(incoming.permissions, current?.permissions),
   };
 }
 

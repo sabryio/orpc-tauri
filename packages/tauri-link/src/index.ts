@@ -11,4 +11,5 @@ export type {
   StreamEvent,
   TauriErrorPayload,
 } from "./types";
-export type { SseEvent } from "./streaming/sse-types";
+export type { SseEvent, EventMeta } from "./streaming/sse-types";
+export { EVENT_META_SYMBOL } from "./streaming/sse-types";

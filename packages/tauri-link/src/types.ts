@@ -1,7 +1,6 @@
 import type { ORPCError } from "@orpc/client";
-import type { Logger as ILogger } from "./logger";
 
-export type Logger = ILogger;
+export type { Logger } from "./logger";
 export type Contract = Record<string, unknown>;
 
 // ============================================================================
@@ -63,5 +62,5 @@ export interface CallOptions<TContext> {
 }
 
 export interface TauriLinkOptions {
-  logger?: Logger;
+  logger?: import("./logger").Logger;
 }

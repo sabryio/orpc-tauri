@@ -1,7 +1,8 @@
 import { ORPCError } from "@orpc/client";
 import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
-import { attachEventMeta, type SseEvent } from "./sse-types";
+import { handleSseEvent } from "./event-handler";
+import type { SseEvent } from "./sse-types";
 import type { StreamResponse, TauriErrorPayload, Logger } from "../types";
 import type { ITauriInvoker, ITauriListener } from "../adapters/tauri-adapter";
 
@@ -11,6 +12,7 @@ export class EventStreamHandler {
     private readonly listener: ITauriListener,
     private readonly logger: Logger,
   ) {}
+
   async *createStream<T>(
     commandName: string,
     input?: unknown,
@@ -20,17 +22,7 @@ export class EventStreamHandler {
     try {
       const streamId = await this.startStream(commandName, input);
       await this.setupListeners(streamId, iterator);
-
-      while (true) {
-        const item = await iterator.dequeue();
-        if (item.type === "value") {
-          yield item.value;
-        } else if (item.type === "error") {
-          throw item.error;
-        } else {
-          break;
-        }
-      }
+      yield* this.consumeStream(iterator);
     } finally {
       iterator.cleanup();
     }
@@ -52,42 +44,45 @@ export class EventStreamHandler {
     return response.stream_id;
   }
 
+  private async *consumeStream<T>(
+    iterator: StreamIterator<T>,
+  ): AsyncIterableIterator<T> {
+    while (true) {
+      const item = await iterator.dequeue();
+      if (item.type === "value") {
+        yield item.value;
+      } else if (item.type === "error") {
+        throw item.error;
+      } else {
+        break;
+      }
+    }
+  }
+
   private async setupListeners<T>(
     streamId: string,
     iterator: StreamIterator<T>,
   ): Promise<void> {
-    const dataEvent = `stream:${streamId}:data`;
-    const doneEvent = `stream:${streamId}:done`;
-    const errorEvent = `stream:${streamId}:error`;
+    const events = {
+      data: `stream:${streamId}:data`,
+      done: `stream:${streamId}:done`,
+      error: `stream:${streamId}:error`,
+    };
 
     const unlistenData = await this.listener.listen<SseEvent<T>>(
-      dataEvent,
-      (message) => {
-        if (message.comment === "flush") {
-          this.logger.log(`[EventStream] Stream ${streamId} connected`);
-        } else if (message.event === "close") {
-          this.logger.log(`[EventStream] Stream ${streamId} closed`);
-          iterator.markFinished();
-          iterator.push({ type: "done" });
-        } else if (message.event === "message" && message.data !== undefined) {
-          const value = message.data as T;
-          attachEventMeta(value, message);
-          iterator.push({ type: "value", value });
-        } else if (message.comment !== undefined) {
-          this.logger.log(`[EventStream] Keep-alive for ${streamId}`);
-        }
-      },
+      events.data,
+      (message) => handleSseEvent(message, iterator, streamId, this.logger),
     );
     iterator.addUnlisten(unlistenData);
 
-    const unlistenDone = await this.listener.listen(doneEvent, () => {
+    const unlistenDone = await this.listener.listen(events.done, () => {
       iterator.markFinished();
       iterator.push({ type: "done" });
     });
     iterator.addUnlisten(unlistenDone);
 
     const unlistenError = await this.listener.listen<TauriErrorPayload>(
-      errorEvent,
+      events.error,
       (error) => {
         iterator.markFinished();
         const orpcError = ErrorHandler.toORPCError(error, "Stream error");
