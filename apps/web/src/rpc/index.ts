@@ -7,14 +7,12 @@ import {
 } from "@orpc/client";
 import { type RouterContractClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { TauriLink, ConsoleLogger } from "@tauri-orpc-contract/tauri-link";
+import { TauriLink } from "@tauri-orpc-contract/tauri-link";
 import { contract } from "./contract";
 export { consumeAsyncIterator, getEventMeta } from "@orpc/client";
 
-// Enable debug logging with ConsoleLogger
-// const link = new TauriLink(contract, { logger: new ConsoleLogger() });
-
-// Default: NoopLogger (silent)
+// Create link with optional custom logger
+// const link = new TauriLink(contract, { logger: customLogger });
 const link = new TauriLink(contract);
 
 export const client: RouterContractClient<typeof contract> =
