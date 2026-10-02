@@ -17,25 +17,10 @@ export const PlanetSchema = z.object({
 // Enum Types
 // ============================================================================
 
-export const SseEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("campaign_created"),
-    data: z.object({ campaign_id: z.string(), title: z.string() }),
-  }),
-  z.object({
-    type: z.literal("campaign_status_changed"),
-    data: z.object({ campaign_id: z.string(), status: z.string() }),
-  }),
-  z.object({
-    type: z.literal("campaign_progress"),
-    data: z.object({
-      campaign_id: z.string(),
-      sent: z.number().int(),
-      total: z.number().int(),
-      failed: z.number().int(),
-    }),
-  }),
-]);
+export const SseEventSchema = z.object({
+  message: z.string(),
+  count: z.number().int(),
+});
 
 export type SseEvent = z.infer<typeof SseEventSchema>;
 
@@ -118,14 +103,7 @@ export const contract = {
     streamEvents: oc
       .meta(openapi({ method: "GET", path: "/stream_events" }))
       .input(z.void())
-      .output(
-        asyncIteratorObject(
-          z.object({
-            message: z.string(),
-            count: z.number().int(),
-          }),
-        ),
-      ),
+      .output(asyncIteratorObject(SseEventSchema)),
   },
 } as const;
 

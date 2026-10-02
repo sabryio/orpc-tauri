@@ -7,7 +7,7 @@ import { Label } from "@tauri-orpc-contract/ui/components/label";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { isDefinedError, orpc } from "@/rpc";
+import { client, isDefinedError, orpc } from "@/rpc";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
@@ -18,6 +18,10 @@ function HomeComponent() {
   const [planetName, setPlanetName] = useState("");
   const [planetDescription, setPlanetDescription] = useState("");
   const [findId, setFindId] = useState("");
+  const [streamEvents, setStreamEvents] = useState<
+    Array<{ message: string; count: number }>
+  >([]);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const pingQuery = useQuery(orpc.ping.ping.queryOptions());
 
@@ -77,6 +81,34 @@ function HomeComponent() {
       },
     }),
   );
+
+  const handleStreamEvents = async () => {
+    setIsStreaming(true);
+    setStreamEvents([]);
+    const controller = new AbortController();
+
+    try {
+      const iterator = await client.stream.streamEvents(undefined, {
+        signal: controller.signal,
+      });
+
+      for await (const event of iterator) {
+        console.log("Received stream event:", event);
+        setStreamEvents((prev) => [...prev, event]);
+      }
+
+      toast.success("Stream completed!");
+    } catch (error) {
+      console.error("Stream error:", error);
+      if (isDefinedError(error)) {
+        toast.error(`Stream error: ${error}`);
+      } else {
+        toast.error("Stream failed");
+      }
+    } finally {
+      setIsStreaming(false);
+    }
+  };
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -226,6 +258,30 @@ function HomeComponent() {
               <p className="text-muted-foreground">
                 No planets yet. Create one above!
               </p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">Stream Events Test</h2>
+          <div className="space-y-4">
+            <Button onClick={handleStreamEvents} disabled={isStreaming}>
+              {isStreaming ? "Streaming..." : "Start Stream"}
+            </Button>
+            {streamEvents.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold">Received Events:</p>
+                {streamEvents.map((event, index) => (
+                  <div key={index} className="p-3 bg-muted rounded-md">
+                    <p className="text-sm">
+                      <strong>Message:</strong> {event.message}
+                    </p>
+                    <p className="text-sm">
+                      <strong>Count:</strong> {event.count}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </Card>

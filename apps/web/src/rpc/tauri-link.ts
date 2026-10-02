@@ -1,5 +1,6 @@
 import { ORPCError } from "@orpc/client";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 interface OpenAPIMeta {
   path?: string;
@@ -89,16 +90,24 @@ export class TauriLink<TContext = unknown> {
       });
     }
 
-    try {
-      console.log(`[TauriLink] ${commandName}`, input);
+    // Check if this procedure returns an async iterator (streaming)
+    const procedure = this.resolveProcedure(path);
+    const isStreaming = this.isStreamingProcedure(procedure, path);
 
-      // Only pass input if it's not undefined (for commands that don't need input)
+    try {
+      if (isStreaming) {
+        // Return an async iterator for streaming procedures
+        return this.createStreamIterator<TOutput>(
+          commandName,
+          input,
+        ) as TOutput;
+      }
+
+      // Regular request-response
       const args =
         input === undefined ? {} : { input: input === null ? null : input };
 
       const response = await invoke<TOutput>(commandName, args);
-
-      console.log(`[TauriLink] ${commandName} →`, response);
 
       return response;
     } catch (error) {
@@ -123,7 +132,10 @@ export class TauriLink<TContext = unknown> {
           });
         }
 
-        console.log("[TauriLink] Created ORPCError:", orpcError);
+        console.log("[TauriLink] Created ORPCError:", {
+          code: orpcError.code,
+          defined: error.defined,
+        });
         throw orpcError;
       }
 
@@ -135,6 +147,153 @@ export class TauriLink<TContext = unknown> {
         message: error instanceof Error ? error.message : "Tauri invoke failed",
         cause: error,
       });
+    }
+  }
+
+  /**
+   * Resolve a procedure from the contract by path
+   */
+  private resolveProcedure(path: string[]): any {
+    let target = this.contract;
+
+    for (const segment of path) {
+      target = target[segment];
+      if (!target) {
+        return null;
+      }
+    }
+
+    return target;
+  }
+
+  /**
+   * Check if a procedure returns an AsyncIteratorObject (streaming)
+   * Checks the schema's ~standard metadata for the ORPC async iterator symbol
+   */
+  private isStreamingProcedure(procedure: any, path: string[]): boolean {
+    if (!procedure || !procedure["~orpc"]) {
+      return false;
+    }
+
+    const orpcMeta = procedure["~orpc"];
+    const outputSchemas = orpcMeta?.outputSchemas;
+
+    if (!outputSchemas || outputSchemas.length === 0) {
+      return false;
+    }
+
+    const outputSchema = outputSchemas[0];
+    const standard = outputSchema?.["~standard"];
+
+    if (!standard) {
+      return false;
+    }
+
+    // Check for the ORPC_ASYNC_ITERATOR_OBJECT_SCHEMA_DETAILS symbol on ~standard
+    // This symbol is added by asyncIteratorObject() in the contract
+    const symbols = Object.getOwnPropertySymbols(standard);
+    const hasAsyncIteratorSymbol = symbols.some((sym) =>
+      sym.toString().includes("ORPC_ASYNC_ITERATOR_OBJECT_SCHEMA_DETAILS"),
+    );
+
+    return hasAsyncIteratorSymbol;
+  }
+
+  /**
+   * Create an async iterator for streaming Tauri commands
+   * Generates a unique stream ID, invokes the command, and listens for events
+   */
+  private async *createStreamIterator<T>(
+    commandName: string,
+    input?: unknown,
+  ): AsyncIterableIterator<T> {
+    type QueueItem =
+      | { type: "value"; value: T }
+      | { type: "done" }
+      | { type: "error"; error: Error };
+
+    const queue: QueueItem[] = [];
+    let waiting: ((item: QueueItem) => void) | null = null;
+    let finished = false;
+    const unlisten: UnlistenFn[] = [];
+
+    function push(item: QueueItem) {
+      if (waiting) {
+        const resolve = waiting;
+        waiting = null;
+        resolve(item);
+      } else {
+        queue.push(item);
+      }
+    }
+
+    function dequeue(): Promise<QueueItem> {
+      if (queue.length > 0) {
+        return Promise.resolve(queue.shift()!);
+      }
+      if (finished) {
+        return Promise.resolve({ type: "done" });
+      }
+      return new Promise<QueueItem>((resolve) => {
+        waiting = resolve;
+      });
+    }
+
+    try {
+      // First, invoke the command to get the stream ID from Rust
+      const args = input === undefined ? {} : { input };
+
+      const response = await invoke<{ stream_id: string }>(commandName, args);
+      const streamId = response.stream_id;
+
+      // Setup event listeners with stream-specific event names
+      const dataEventName = `stream:${streamId}:data`;
+      const doneEventName = `stream:${streamId}:done`;
+      const errorEventName = `stream:${streamId}:error`;
+
+      const unlistenData = await listen<T>(dataEventName, (event) => {
+        push({ type: "value", value: event.payload });
+      });
+      unlisten.push(unlistenData);
+
+      const unlistenDone = await listen(doneEventName, () => {
+        finished = true;
+        push({ type: "done" });
+      });
+      unlisten.push(unlistenDone);
+
+      const unlistenError = await listen<TauriErrorPayload>(
+        errorEventName,
+        (event) => {
+          finished = true;
+          const error = this.isTauriORPCError(event.payload)
+            ? new ORPCError(event.payload.code as any, {
+                message: event.payload.message || "Stream error",
+                data: event.payload.data,
+              })
+            : new ORPCError("INTERNAL_ERROR", {
+                message: "Stream error occurred",
+              });
+          push({ type: "error", error });
+        },
+      );
+      unlisten.push(unlistenError);
+
+      // Yield values as they arrive
+      while (true) {
+        const item = await dequeue();
+        if (item.type === "value") {
+          yield item.value;
+        } else if (item.type === "error") {
+          throw item.error;
+        } else {
+          // done
+          break;
+        }
+      }
+    } finally {
+      // Cleanup listeners
+      unlisten.forEach((fn) => fn());
     }
   }
 
