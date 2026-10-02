@@ -40,12 +40,20 @@ function HomeComponent() {
 
   // useQuery streamed pattern
   const streamedQuery = useQuery(
-    orpc.stream.streamEvents.streamedOptions({ retry: false, enabled: false }),
+    orpc.stream.streamEvents.streamedOptions({
+      retry: false,
+      enabled: false,
+      gcTime: 0 // Immediately cleanup when query becomes inactive
+    }),
   );
 
   // useQuery live pattern (latest event only)
   const liveQuery = useQuery(
-    orpc.stream.streamEvents.liveOptions({ retry: false, enabled: false }),
+    orpc.stream.streamEvents.liveOptions({
+      retry: false,
+      enabled: false,
+      gcTime: 0 // Immediately cleanup when query becomes inactive
+    }),
   );
 
   const pingQuery = useQuery(orpc.ping.ping.queryOptions());

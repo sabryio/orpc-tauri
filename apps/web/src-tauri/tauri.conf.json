@@ -20,7 +20,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "transparent": false
+        "transparent": false,
+        "center": true
       }
     ],
     "security": {
@@ -36,7 +37,10 @@
             "core:window:allow-maximize",
             "core:window:allow-unmaximize",
             "core:window:allow-toggle-maximize",
-            "core:window:allow-is-maximized"
+            "core:window:allow-is-maximized",
+            "core:event:allow-listen",
+            "core:event:allow-emit",
+            "core:event:default"
           ]
         }
       ]
