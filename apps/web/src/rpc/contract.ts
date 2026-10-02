@@ -49,18 +49,18 @@ const StandardApiErrors = {
 export const contract = {
   ping: {
     ping: oc
-      .meta(tauri({ command: "ping" }))
+      .meta(tauri.command("ping"))
       .input(z.void())
       .output(PingResponseSchema),
   },
   planet: {
     deletePlanet: oc
-      .meta(tauri({ command: "delete_planet" }))
+      .meta(tauri.command("delete_planet"))
       .input(z.object({ id: z.number().int() }))
       .output(z.void())
       .errors(StandardApiErrors),
     createPlanet: oc
-      .meta(tauri({ command: "create_planet" }))
+      .meta(tauri.command("create_planet"))
       .input(
         z.object({
           name: z.string(),
@@ -70,12 +70,12 @@ export const contract = {
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     findPlanet: oc
-      .meta(tauri({ command: "find_planet" }))
+      .meta(tauri.command("find_planet"))
       .input(z.object({ id: z.number().int(), q: z.string().optional() }))
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     listPlanetsPaginated: oc
-      .meta(tauri({ command: "list_planets_paginated" }))
+      .meta(tauri.command("list_planets_paginated"))
       .input(
         z.object({
           limit: z.number().int(),
@@ -90,18 +90,20 @@ export const contract = {
       )
       .errors(StandardApiErrors),
     listPlanets: oc
-      .meta(tauri({ command: "list_planets" }))
+      .meta(tauri.command("list_planets"))
       .input(z.void())
       .output(z.array(PlanetSchema))
       .errors(StandardApiErrors),
   },
   stream: {
     streamEvents: oc
-      .meta(tauri({ command: "stream_events", transport: "emit-listen" }))
+      .meta(tauri.command("stream_events"))
+      .meta(tauri.transport("emit-listen"))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
-      .meta(tauri({ command: "stream_events_channel", transport: "channel" }))
+      .meta(tauri.command("stream_events_channel"))
+      .meta(tauri.transport("channel"))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },

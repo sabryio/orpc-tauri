@@ -29,7 +29,7 @@ export class ProcedureResolver {
 
     if (!tauriMeta?.command) {
       throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
-        message: `No Tauri command name found for procedure: ${path.join(".")}. Add tauri({ command: "..." }) metadata.`,
+        message: `No Tauri command name found for procedure: ${path.join(".")}. Add tauri.command("command_name") metadata.`,
       });
     }
 
@@ -64,5 +64,13 @@ export class ProcedureResolver {
 
     const tauriMeta = extractTauriMeta(procedure);
     return tauriMeta?.transport ?? "emit-listen";
+  }
+
+  getDebug(path: string[]): boolean {
+    const procedure = this.resolve(path);
+    if (!procedure) return false;
+
+    const tauriMeta = extractTauriMeta(procedure);
+    return tauriMeta?.debug ?? false;
   }
 }

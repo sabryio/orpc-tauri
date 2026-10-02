@@ -5,17 +5,20 @@ import { ProcedureResolver } from "./resolvers/procedure-resolver";
 import { EventStreamHandler } from "./streaming/event-stream";
 import { ChannelStreamHandler } from "./streaming/channel-stream";
 import { ErrorHandler } from "./errors/error-handler";
-import type { Contract, CallOptions } from "./types";
+import { NoopLogger } from "./logger";
+import type { Contract, CallOptions, TauriLinkOptions, Logger } from "./types";
 
 export class TauriLink<TContext = unknown> {
   private readonly resolver: ProcedureResolver;
   private readonly eventStream: EventStreamHandler;
   private readonly channelStream: ChannelStreamHandler;
+  private readonly logger: Logger;
 
-  constructor(contract: Contract) {
+  constructor(contract: Contract, options?: TauriLinkOptions) {
     this.resolver = new ProcedureResolver(contract);
     this.eventStream = new EventStreamHandler();
     this.channelStream = new ChannelStreamHandler();
+    this.logger = options?.logger ?? new NoopLogger();
 
     new ContractValidator().validate(contract);
   }
@@ -26,6 +29,11 @@ export class TauriLink<TContext = unknown> {
     callOptions?: CallOptions<TContext>,
   ): Promise<TOutput> {
     const commandName = this.resolver.extractCommandName(path);
+    const debug = this.resolver.getDebug(path);
+
+    if (debug) {
+      this.logger.log(`[TauriLink] ${commandName}`, { input, path: path.join(".") });
+    }
 
     if (callOptions?.signal?.aborted) {
       throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
@@ -50,8 +58,17 @@ export class TauriLink<TContext = unknown> {
         ) as TOutput;
       }
 
-      return await this.invokeCommand<TInput, TOutput>(commandName, input);
+      const result = await this.invokeCommand<TInput, TOutput>(commandName, input);
+
+      if (debug) {
+        this.logger.log(`[TauriLink] ${commandName} →`, result);
+      }
+
+      return result;
     } catch (error) {
+      if (debug) {
+        this.logger.error(`[TauriLink] ${commandName} ✗`, error);
+      }
       throw ErrorHandler.toORPCError(error, `${commandName} failed`);
     }
   }

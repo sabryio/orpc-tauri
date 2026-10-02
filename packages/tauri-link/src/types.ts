@@ -1,4 +1,7 @@
 import type { ORPCError } from "@orpc/client";
+import type { Logger as ILogger } from "./logger";
+
+export type Logger = ILogger;
 
 // ============================================================================
 // Metadata Types
@@ -6,16 +9,17 @@ import type { ORPCError } from "@orpc/client";
 
 export interface TauriMeta {
   /**
+   * Tauri command name
+   * Required for all procedures
+   */
+  command: string;
+
+  /**
    * Transport mechanism for streaming procedures
    * - "emit-listen": Event-based streaming with stream IDs (default)
    * - "channel": Bidirectional Channel API streaming
    */
   transport?: "emit-listen" | "channel";
-
-  /**
-   * Custom Tauri command name override
-   */
-  command?: string;
 
   /**
    * Command timeout in milliseconds
@@ -36,6 +40,18 @@ export interface TauriMeta {
    * Permissions required for this command
    */
   permissions?: string[];
+}
+
+export interface MetaPlugin {
+  name: string;
+  init(meta: Record<string, unknown>): Record<string, unknown>;
+}
+
+export interface ORPCMeta {
+  meta?: {
+    "~tauri"?: TauriMeta;
+  };
+  outputSchemas?: unknown[];
 }
 
 export interface ORPCMeta {
@@ -84,3 +100,15 @@ export type ChannelEvent<T> =
 // ============================================================================
 
 export type Contract = Record<string, unknown>;
+
+// ============================================================================
+// TauriLink Options
+// ============================================================================
+
+export interface TauriLinkOptions {
+  /**
+   * Custom logger for debug output
+   * Defaults to console if not provided
+   */
+  logger?: Logger;
+}
