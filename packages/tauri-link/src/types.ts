@@ -10,6 +10,7 @@ export type Contract = Record<string, unknown>;
 export interface TauriMeta {
   command: string;
   transport?: "emit-listen" | "channel";
+  streamId?: string;
   timeout?: number;
   debug?: boolean;
   tags?: string[];

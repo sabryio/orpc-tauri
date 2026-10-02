@@ -11,16 +11,13 @@ pub struct StreamEventData {
 }
 
 #[tauri::command]
-pub async fn stream_events(app: AppHandle) {
-    // Use command name directly as stream_id (no UUID generation!)
-    let stream_id = "stream_events";
-
+pub async fn stream_events(app: AppHandle, stream_id: String) {
     log::info!(
         "Stream events command invoked with stream_id: {}",
         stream_id
     );
 
-    let stream_id_clone = stream_id.to_string();
+    let stream_id_clone = stream_id.clone();
 
     // Spawn async task to emit events
     tauri::async_runtime::spawn(async move {
@@ -43,7 +40,7 @@ pub async fn stream_events(app: AppHandle) {
         // 2. EVENTS: Stream actual data events (Axum-style with id and retry)
         for i in 1..=5 {
             let payload = StreamEventData {
-                message: format!("Event {}", i),
+                message: format!("Event {} [stream_id: {}]", i, stream_id_clone),
                 count: i,
             };
 
@@ -78,6 +75,6 @@ pub async fn stream_events(app: AppHandle) {
             log::error!("Failed to emit done event: {:?}", e);
         }
 
-        log::info!("Stream events completed");
+        log::info!("Stream events completed for: {}", stream_id_clone);
     });
 }

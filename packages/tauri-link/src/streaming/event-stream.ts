@@ -18,11 +18,16 @@ export class EventStreamHandler {
   async *createStream<T>(
     commandName: string,
     input?: unknown,
+    customStreamId?: string,
   ): AsyncIterableIterator<T> {
     const iterator = new StreamIterator<T>();
 
     try {
-      const streamId = await this.startStream(commandName, input);
+      const streamId = await this.startStream(
+        commandName,
+        input,
+        customStreamId,
+      );
       await this.setupListeners(streamId, iterator);
       yield* this.consumeStream(iterator);
     } finally {
@@ -33,13 +38,16 @@ export class EventStreamHandler {
   private async startStream(
     commandName: string,
     input?: unknown,
+    customStreamId?: string,
   ): Promise<string> {
-    // Use commandName directly as stream_id (no UUID generation!)
-    const streamId = commandName;
+    // Use custom streamId from metadata, or fallback to commandName
+    const streamId = customStreamId || commandName;
 
-    const args = input === undefined ? {} : { input };
+    // Pass streamId to backend
+    const args =
+      input === undefined ? { streamId } : { ...input, streamId };
 
-    // Invoke command without stream_id parameter
+    // Invoke command with streamId parameter
     await this.invoker.invoke(commandName, args);
 
     return streamId;

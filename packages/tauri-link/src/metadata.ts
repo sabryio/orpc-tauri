@@ -23,15 +23,13 @@ function mergeArrayField<T>(
   return incomingField ?? currentField;
 }
 
-function mergeTauriMeta(
-  incoming: TauriMeta,
-  current?: TauriMeta,
-): TauriMeta {
+function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
   validateCommandChange(incoming.command, current?.command);
 
   return {
     command: incoming.command ?? current?.command,
     transport: incoming.transport ?? current?.transport,
+    streamId: incoming.streamId ?? current?.streamId,
     timeout: incoming.timeout ?? current?.timeout,
     debug: incoming.debug ?? current?.debug,
     tags: mergeArrayField(incoming.tags, current?.tags),
@@ -54,6 +52,7 @@ export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
   (meta: TauriMeta): MetaPlugin;
   command(command: string): MetaPlugin;
   transport(transport: TauriMeta["transport"]): MetaPlugin;
+  streamId(streamId: string): MetaPlugin;
   timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
   debug(debug: TauriMeta["debug"]): MetaPlugin;
 };
@@ -64,8 +63,9 @@ export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
 
 tauri.command = (command): MetaPlugin => tauri({ command } as TauriMeta);
 
-tauri.transport = (transport): MetaPlugin =>
-  tauri({ transport } as TauriMeta);
+tauri.transport = (transport): MetaPlugin => tauri({ transport } as TauriMeta);
+
+tauri.streamId = (streamId): MetaPlugin => tauri({ streamId } as TauriMeta);
 
 tauri.timeout = (timeout): MetaPlugin => tauri({ timeout } as TauriMeta);
 

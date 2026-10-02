@@ -98,6 +98,7 @@ export const contract = {
   stream: {
     streamEvents: oc
       .meta(tauri.command("stream_events"))
+      .meta(tauri.streamId("custom_stream_test"))
       .meta(tauri.transport("emit-listen"))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),

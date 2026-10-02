@@ -69,6 +69,7 @@ export class TauriLink<TContext = unknown> {
     try {
       if (this.resolver.isStreaming(path)) {
         const transport = this.resolver.getTransport(path);
+        const customStreamId = this.resolver.getStreamId(path);
 
         if (transport === "channel") {
           return this.channelStream.createStream<TOutput>(
@@ -80,10 +81,14 @@ export class TauriLink<TContext = unknown> {
         return this.eventStream.createStream<TOutput>(
           commandName,
           input,
+          customStreamId,
         ) as TOutput;
       }
 
-      const result = await this.invokeCommand<TInput, TOutput>(commandName, input);
+      const result = await this.invokeCommand<TInput, TOutput>(
+        commandName,
+        input,
+      );
 
       if (debug) {
         this.logger.log(`[TauriLink] ${commandName} →`, result);

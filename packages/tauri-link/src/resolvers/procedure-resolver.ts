@@ -73,4 +73,12 @@ export class ProcedureResolver {
     const tauriMeta = extractTauriMeta(procedure);
     return tauriMeta?.debug ?? false;
   }
+
+  getStreamId(path: string[]): string | undefined {
+    const procedure = this.resolve(path);
+    if (!procedure) return undefined;
+
+    const tauriMeta = extractTauriMeta(procedure);
+    return tauriMeta?.streamId;
+  }
 }
