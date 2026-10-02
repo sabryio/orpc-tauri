@@ -1,13 +1,7 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useInfiniteQuery,
-} from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { useState, useRef } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 import {
   Activity,
   Database,
@@ -17,15 +11,7 @@ import {
   BarChart3,
 } from "lucide-react";
 
-import {
-  client,
-  getEventMeta,
-  isDefinedError,
-  orpc,
-  consumeAsyncIterator,
-} from "@/rpc";
-import { useStreamEvents } from "@/hooks/use-stream-events";
-import { mutationHandlers } from "@/hooks/use-mutation-handlers";
+import { orpc } from "@/rpc";
 import { OverviewTab } from "./-components/overview-tab";
 import { DataLayerTab } from "./-components/data-layer-tab";
 import { StreamingTab } from "./-components/streaming-tab";
@@ -37,147 +23,8 @@ export const Route = createFileRoute("/")({
 });
 
 function HomeComponent() {
-  const queryClient = useQueryClient();
-  const [planetName, setPlanetName] = useState("");
-  const [planetDescription, setPlanetDescription] = useState("");
-  const [findId, setFindId] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
-
-  const stream = useStreamEvents<{ message: string; count: number }>();
-  const channelStream = useStreamEvents<{ message: string; count: number }>();
-
-  // Async iterator pattern state
-  const [asyncEvents, setAsyncEvents] = useState<
-    Array<{ message: string; count: number; id?: string; retry?: number }>
-  >([]);
-  const [asyncStreaming, setAsyncStreaming] = useState(false);
-  const [asyncError, setAsyncError] = useState<string | null>(null);
-  const [asyncFinished, setAsyncFinished] = useState(false);
-  const cancelRef = useRef<(() => void) | null>(null);
-
-  // useQuery streamed pattern
-  const streamedQuery = useQuery(
-    orpc.stream.streamEvents.streamedOptions({
-      retry: false,
-      enabled: false,
-      gcTime: 0, // Immediately cleanup when query becomes inactive
-    }),
-  );
-
-  // useQuery live pattern (latest event only)
-  const liveQuery = useQuery(
-    orpc.stream.streamEvents.liveOptions({
-      retry: false,
-      enabled: false,
-      gcTime: 0, // Immediately cleanup when query becomes inactive
-      structuralSharing: false, // Prevent React Query from cloning data and losing Symbol
-    }),
-  );
-
   const pingQuery = useQuery(orpc.ping.ping.queryOptions());
-
-  const planetsQuery = useInfiniteQuery(
-    orpc.planet.listPlanetsPaginated.infiniteOptions({
-      input: (pageParam: number | undefined) => ({
-        limit: 10,
-        offset: pageParam ?? 0,
-      }),
-      initialPageParam: undefined,
-      getNextPageParam: (lastPage) => lastPage.next_page_param,
-    }),
-  );
-
-  const createPlanetMutation = useMutation(
-    orpc.planet.createPlanet.mutationOptions(
-      mutationHandlers("Planet created", "Failed to create planet", () => {
-        setPlanetName("");
-        setPlanetDescription("");
-        queryClient.invalidateQueries({ queryKey: orpc.planet.key() });
-      }),
-    ),
-  );
-
-  const findPlanetMutation = useMutation(
-    orpc.planet.findPlanet.mutationOptions({
-      onSuccess: (data) => toast.success(`Found planet: ${data.name}`),
-      onError: (error) => {
-        console.log("Error: ", JSON.stringify(error));
-        toast.error(
-          isDefinedError(error)
-            ? `Contract Error [${error.code}]: ${error.message}`
-            : `Unexpected Error: ${error.message || "Failed to find planet"}`,
-        );
-      },
-    }),
-  );
-
-  const deletePlanetMutation = useMutation(
-    orpc.planet.deletePlanet.mutationOptions(
-      mutationHandlers("Planet deleted", "Failed to delete planet", () =>
-        queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
-      ),
-    ),
-  );
-
-  const handleStreamEvents = () =>
-    stream.startStream(
-      () =>
-        client.stream.streamEvents(undefined, {
-          signal: new AbortController().signal,
-        }),
-      "Stream completed!",
-    );
-
-  const handleChannelStreamEvents = () =>
-    channelStream.startStream(
-      () =>
-        client.stream.streamEventsChannel(undefined, {
-          signal: new AbortController().signal,
-        }),
-      "Channel stream completed!",
-    );
-
-  const handleAsyncIteratorStream = () => {
-    setAsyncStreaming(true);
-    setAsyncEvents([]);
-    setAsyncError(null);
-    setAsyncFinished(false);
-
-    const cancel = consumeAsyncIterator(client.stream.streamEvents(), {
-      onEvent: (event) => {
-        const meta = getEventMeta(event);
-        setAsyncEvents((prev) => [
-          ...prev,
-          { ...event, id: meta?.id, retry: meta?.retry },
-        ]);
-      },
-      onError: (err) => {
-        setAsyncError(String(err));
-        setAsyncStreaming(false);
-        toast.error("Async stream failed");
-      },
-      onSuccess: (value) => {
-        console.log("Stream completed successfully:", value);
-        setAsyncStreaming(false);
-        toast.success("Async stream completed!");
-      },
-      onFinish: (state) => {
-        console.log("Stream finished with state:", state);
-        setAsyncFinished(true);
-        setAsyncStreaming(false);
-        cancelRef.current = null;
-      },
-    });
-
-    cancelRef.current = cancel;
-  };
-
-  const handleCancelAsyncStream = () => {
-    if (cancelRef.current) {
-      cancelRef.current();
-      toast.info("Stream cancelled");
-    }
-  };
 
   return (
     <div className="flex h-screen bg-background flex-col">
@@ -287,51 +134,11 @@ function HomeComponent() {
           {/* Content Area */}
           <main className="flex-1 min-h-0 overflow-auto p-6">
             {activeTab === "overview" && (
-              <OverviewTab
-                pingQuery={pingQuery}
-                planetsQuery={planetsQuery}
-                onTabChange={setActiveTab}
-              />
+              <OverviewTab pingQuery={pingQuery} onTabChange={setActiveTab} />
             )}
-
-            {activeTab === "data" && (
-              <DataLayerTab
-                planetName={planetName}
-                setPlanetName={setPlanetName}
-                planetDescription={planetDescription}
-                setPlanetDescription={setPlanetDescription}
-                findId={findId}
-                setFindId={setFindId}
-                planetsQuery={planetsQuery}
-                createPlanetMutation={createPlanetMutation}
-                findPlanetMutation={findPlanetMutation}
-                deletePlanetMutation={deletePlanetMutation}
-              />
-            )}
-
-            {activeTab === "streaming" && (
-              <StreamingTab
-                emitListenEvents={stream.events}
-                isEmitListenStreaming={stream.isStreaming}
-                onStartEmitListen={handleStreamEvents}
-                channelEvents={channelStream.events}
-                isChannelStreaming={channelStream.isStreaming}
-                onStartChannel={handleChannelStreamEvents}
-                asyncEvents={asyncEvents}
-                isAsyncStreaming={asyncStreaming}
-                asyncError={asyncError}
-                asyncFinished={asyncFinished}
-                onStartAsync={handleAsyncIteratorStream}
-                onCancelAsync={handleCancelAsyncStream}
-              />
-            )}
-
-            {activeTab === "advanced" && (
-              <AdvancedTab
-                streamedQuery={streamedQuery}
-                liveQuery={liveQuery}
-              />
-            )}
+            {activeTab === "data" && <DataLayerTab />}
+            {activeTab === "streaming" && <StreamingTab />}
+            {activeTab === "advanced" && <AdvancedTab />}
           </main>
         </div>
       </div>

@@ -1,15 +1,26 @@
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Button } from "@tauri-orpc-contract/ui/components/button";
 import { Card } from "@tauri-orpc-contract/ui/components/card";
 import { Activity, Database, BarChart3, Radio, Zap } from "lucide-react";
-import type { UseQueryResult, UseInfiniteQueryResult } from "@tanstack/react-query";
+import { orpc } from "@/rpc";
+import type { UseQueryResult } from "@tanstack/react-query";
 
 interface OverviewTabProps {
   pingQuery: UseQueryResult<{ id: string; message: string }>;
-  planetsQuery: UseInfiniteQueryResult<any>;
   onTabChange: (tab: string) => void;
 }
 
-export function OverviewTab({ pingQuery, planetsQuery, onTabChange }: OverviewTabProps) {
+export function OverviewTab({ pingQuery, onTabChange }: OverviewTabProps) {
+  const planetsQuery = useInfiniteQuery(
+    orpc.planet.listPlanetsPaginated.infiniteOptions({
+      input: (pageParam: number | undefined) => ({
+        limit: 10,
+        offset: pageParam ?? 0,
+      }),
+      initialPageParam: undefined,
+      getNextPageParam: (lastPage) => lastPage.next_page_param,
+    }),
+  );
   const totalPlanets = planetsQuery.data?.pages.flatMap(p => p.items).length ?? 0;
   const pagesLoaded = planetsQuery.data?.pages.length ?? 0;
 

@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@tauri-orpc-contract/ui/components/button";
 import { Card } from "@tauri-orpc-contract/ui/components/card";
 import {
@@ -9,7 +10,7 @@ import {
 import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
 import { Play } from "lucide-react";
 import { EventCard } from "./event-card";
-import type { UseQueryResult } from "@tanstack/react-query";
+import { orpc } from "@/rpc";
 
 interface StreamEvent {
   message: string;
@@ -18,12 +19,23 @@ interface StreamEvent {
   retry?: number;
 }
 
-interface AdvancedTabProps {
-  streamedQuery: UseQueryResult<StreamEvent[]>;
-  liveQuery: UseQueryResult<StreamEvent>;
-}
+export function AdvancedTab() {
+  const streamedQuery = useQuery(
+    orpc.stream.streamEvents.streamedOptions({
+      retry: false,
+      enabled: false,
+      gcTime: 0,
+    }),
+  );
 
-export function AdvancedTab({ streamedQuery, liveQuery }: AdvancedTabProps) {
+  const liveQuery = useQuery(
+    orpc.stream.streamEvents.liveOptions({
+      retry: false,
+      enabled: false,
+      gcTime: 0,
+      structuralSharing: false,
+    }),
+  );
   return (
     <Tabs defaultValue="streamed" className="h-full flex flex-col">
       <TabsList className="mb-4 bg-card border border-primary/30">

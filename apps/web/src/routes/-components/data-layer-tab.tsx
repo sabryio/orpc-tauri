@@ -1,3 +1,4 @@
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@tauri-orpc-contract/ui/components/button";
 import { Card } from "@tauri-orpc-contract/ui/components/card";
 import { Input } from "@tauri-orpc-contract/ui/components/input";
@@ -10,12 +11,11 @@ import {
 } from "@tauri-orpc-contract/ui/components/tabs";
 import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
 import { Database, Plus, Globe, Trash2 } from "lucide-react";
-import type {
-  UseInfiniteQueryResult,
-  UseMutationResult,
-  InfiniteData,
-} from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { NumberInput } from "@/components/number-input";
+import { orpc, isDefinedError } from "@/rpc";
+import { mutationHandlers } from "@/hooks/use-mutation-handlers";
 
 interface Planet {
   id: number;
@@ -23,39 +23,53 @@ interface Planet {
   description?: string;
 }
 
-interface PlanetPageData {
-  items: Planet[];
-  next_page_param?: number;
-}
+export function DataLayerTab() {
+  const queryClient = useQueryClient();
+  const [planetName, setPlanetName] = useState("");
+  const [planetDescription, setPlanetDescription] = useState("");
+  const [findId, setFindId] = useState("");
 
-interface DataLayerTabProps {
-  // Planet state
-  planetName: string;
-  setPlanetName: (name: string) => void;
-  planetDescription: string;
-  setPlanetDescription: (desc: string) => void;
-  findId: string;
-  setFindId: (id: string) => void;
+  const planetsQuery = useInfiniteQuery(
+    orpc.planet.listPlanetsPaginated.infiniteOptions({
+      input: (pageParam: number | undefined) => ({
+        limit: 10,
+        offset: pageParam ?? 0,
+      }),
+      initialPageParam: undefined,
+      getNextPageParam: (lastPage) => lastPage.next_page_param,
+    }),
+  );
 
-  // Queries and mutations
-  planetsQuery: UseInfiniteQueryResult<InfiniteData<PlanetPageData>>;
-  createPlanetMutation: UseMutationResult<any, any, any>;
-  findPlanetMutation: UseMutationResult<Planet, any, any>;
-  deletePlanetMutation: UseMutationResult<any, any, any>;
-}
+  const createPlanetMutation = useMutation(
+    orpc.planet.createPlanet.mutationOptions(
+      mutationHandlers("Planet created", "Failed to create planet", () => {
+        setPlanetName("");
+        setPlanetDescription("");
+        queryClient.invalidateQueries({ queryKey: orpc.planet.key() });
+      }),
+    ),
+  );
 
-export function DataLayerTab({
-  planetName,
-  setPlanetName,
-  planetDescription,
-  setPlanetDescription,
-  findId,
-  setFindId,
-  planetsQuery,
-  createPlanetMutation,
-  findPlanetMutation,
-  deletePlanetMutation,
-}: DataLayerTabProps) {
+  const findPlanetMutation = useMutation(
+    orpc.planet.findPlanet.mutationOptions({
+      onSuccess: (data) => toast.success(`Found planet: ${data.name}`),
+      onError: (error) => {
+        toast.error(
+          isDefinedError(error)
+            ? `Contract Error [${error.code}]: ${error.message}`
+            : `Unexpected Error: ${error.message || "Failed to find planet"}`,
+        );
+      },
+    }),
+  );
+
+  const deletePlanetMutation = useMutation(
+    orpc.planet.deletePlanet.mutationOptions(
+      mutationHandlers("Planet deleted", "Failed to delete planet", () =>
+        queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
+      ),
+    ),
+  );
   const allPlanets: Planet[] =
     planetsQuery.data?.pages.flatMap((p) => p.items) || [];
 

@@ -3,7 +3,11 @@ import { Card } from "@tauri-orpc-contract/ui/components/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tauri-orpc-contract/ui/components/tabs";
 import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
 import { Play, X } from "lucide-react";
+import { useState, useRef } from "react";
+import { toast } from "sonner";
 import { EventCard } from "./event-card";
+import { useStreamEvents } from "@/hooks/use-stream-events";
+import { client, getEventMeta, consumeAsyncIterator } from "@/rpc";
 
 interface StreamEvent {
   message: string;
@@ -12,40 +16,69 @@ interface StreamEvent {
   retry?: number;
 }
 
-interface StreamingTabProps {
-  // Emit-Listen
-  emitListenEvents: StreamEvent[];
-  isEmitListenStreaming: boolean;
-  onStartEmitListen: () => void;
+export function StreamingTab() {
+  const stream = useStreamEvents<{ message: string; count: number }>();
+  const channelStream = useStreamEvents<{ message: string; count: number }>();
 
-  // Channel
-  channelEvents: StreamEvent[];
-  isChannelStreaming: boolean;
-  onStartChannel: () => void;
+  const [asyncEvents, setAsyncEvents] = useState<StreamEvent[]>([]);
+  const [asyncStreaming, setAsyncStreaming] = useState(false);
+  const [asyncError, setAsyncError] = useState<string | null>(null);
+  const [asyncFinished, setAsyncFinished] = useState(false);
+  const cancelRef = useRef<(() => void) | null>(null);
 
-  // Async Iterator
-  asyncEvents: StreamEvent[];
-  isAsyncStreaming: boolean;
-  asyncError: string | null;
-  asyncFinished: boolean;
-  onStartAsync: () => void;
-  onCancelAsync: () => void;
-}
+  const handleStartEmitListen = () =>
+    stream.startStream(
+      () => client.stream.streamEvents(undefined, { signal: new AbortController().signal }),
+      "Stream completed!",
+    );
 
-export function StreamingTab({
-  emitListenEvents,
-  isEmitListenStreaming,
-  onStartEmitListen,
-  channelEvents,
-  isChannelStreaming,
-  onStartChannel,
-  asyncEvents,
-  isAsyncStreaming,
-  asyncError,
-  asyncFinished,
-  onStartAsync,
-  onCancelAsync,
-}: StreamingTabProps) {
+  const handleStartChannel = () =>
+    channelStream.startStream(
+      () => client.stream.streamEventsChannel(undefined, { signal: new AbortController().signal }),
+      "Channel stream completed!",
+    );
+
+  const handleStartAsync = () => {
+    setAsyncStreaming(true);
+    setAsyncEvents([]);
+    setAsyncError(null);
+    setAsyncFinished(false);
+
+    const cancel = consumeAsyncIterator(client.stream.streamEvents(), {
+      onEvent: (event) => {
+        const meta = getEventMeta(event);
+        setAsyncEvents((prev) => [...prev, { ...event, id: meta?.id, retry: meta?.retry }]);
+      },
+      onError: (err) => {
+        setAsyncError(String(err));
+        setAsyncStreaming(false);
+        toast.error("Async stream failed");
+      },
+      onSuccess: () => {
+        setAsyncStreaming(false);
+        toast.success("Async stream completed!");
+      },
+      onFinish: () => {
+        setAsyncFinished(true);
+        setAsyncStreaming(false);
+        cancelRef.current = null;
+      },
+    });
+
+    cancelRef.current = cancel;
+  };
+
+  const handleCancelAsync = () => {
+    if (cancelRef.current) {
+      cancelRef.current();
+      toast.info("Stream cancelled");
+    }
+  };
+
+  const emitListenEvents = stream.events;
+  const isEmitListenStreaming = stream.isStreaming;
+  const channelEvents = channelStream.events;
+  const isChannelStreaming = channelStream.isStreaming;
   return (
     <Tabs defaultValue="emit-listen" className="h-full flex flex-col">
       <TabsList className="mb-4 bg-card border border-primary/30">
@@ -64,7 +97,7 @@ export function StreamingTab({
         <Card className="p-6 border-primary/30 bg-card flex flex-col flex-1 min-h-0">
           <div className="flex items-center justify-between mb-4 flex-none">
             <h3 className="text-sm font-semibold text-primary">Emit-Listen Transport</h3>
-            <Button onClick={onStartEmitListen} disabled={isEmitListenStreaming} className="glow-hover">
+            <Button onClick={handleStartEmitListen} disabled={isEmitListenStreaming} className="glow-hover">
               <Play className="h-4 w-4 mr-2" />
               {isEmitListenStreaming ? "Streaming..." : "Start Stream"}
             </Button>
@@ -85,7 +118,7 @@ export function StreamingTab({
         <Card className="p-6 border-primary/30 bg-card flex flex-col flex-1 min-h-0">
           <div className="flex items-center justify-between mb-4 flex-none">
             <h3 className="text-sm font-semibold text-primary">Channel Transport (Tauri Native)</h3>
-            <Button onClick={onStartChannel} disabled={isChannelStreaming} className="glow-hover">
+            <Button onClick={handleStartChannel} disabled={isChannelStreaming} className="glow-hover">
               <Play className="h-4 w-4 mr-2" />
               {isChannelStreaming ? "Streaming..." : "Start Stream"}
             </Button>
@@ -107,12 +140,12 @@ export function StreamingTab({
           <div className="flex items-center justify-between mb-4 flex-none">
             <h3 className="text-sm font-semibold text-primary">Async Iterator Pattern</h3>
             <div className="flex gap-2">
-              <Button onClick={onStartAsync} disabled={isAsyncStreaming} className="glow-hover">
+              <Button onClick={handleStartAsync} disabled={asyncStreaming} className="glow-hover">
                 <Play className="h-4 w-4 mr-2" />
-                {isAsyncStreaming ? "Streaming..." : "Start"}
+                {asyncStreaming ? "Streaming..." : "Start"}
               </Button>
-              {isAsyncStreaming && (
-                <Button onClick={onCancelAsync} variant="destructive">
+              {asyncStreaming && (
+                <Button onClick={handleCancelAsync} variant="destructive">
                   <X className="h-4 w-4 mr-2" />
                   Cancel
                 </Button>
@@ -125,7 +158,7 @@ export function StreamingTab({
                 <strong>Error:</strong> {asyncError}
               </div>
             )}
-            {asyncFinished && (
+            {asyncFinished && !asyncStreaming && (
               <div className="p-3 bg-success/10 border border-success/50 rounded text-sm">
                 Stream finished
               </div>
