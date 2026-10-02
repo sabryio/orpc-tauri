@@ -1,6 +1,11 @@
 import { ORPCError } from "@orpc/client";
 import { extractTauriMeta } from "../metadata";
-import type { Contract, ORPCMeta, TauriParamConfig } from "../types";
+import type {
+  Contract,
+  ORPCMeta,
+  TauriParamConfig,
+  EventNamesConfig,
+} from "../types";
 
 export class ProcedureResolver {
   constructor(private readonly contract: Contract) {}
@@ -80,5 +85,13 @@ export class ProcedureResolver {
 
     const tauriMeta = extractTauriMeta(procedure);
     return tauriMeta?.param;
+  }
+
+  getEvents(path: string[]): EventNamesConfig | undefined {
+    const procedure = this.resolve(path);
+    if (!procedure) return undefined;
+
+    const tauriMeta = extractTauriMeta(procedure);
+    return tauriMeta?.events;
   }
 }

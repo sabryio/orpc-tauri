@@ -11,10 +11,20 @@ export type TauriParamConfig =
   | { kind: "stream"; name: string; value?: string }
   | { kind: "channel"; name: string };
 
+export type EventNamesConfig = {
+  paramName: string; // Parameter name in Rust (e.g., "eventNames", "event_names")
+  generator: (streamId: string) => {
+    data: string;
+    done: string;
+    error: string;
+  };
+};
+
 export interface TauriMeta {
   command: string;
   transport?: "emit-listen" | "channel";
   param?: TauriParamConfig;
+  events?: EventNamesConfig;
   timeout?: number;
   debug?: boolean;
   tags?: string[];

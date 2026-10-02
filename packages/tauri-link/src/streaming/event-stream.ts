@@ -1,13 +1,12 @@
-import { ORPCError } from "@orpc/client";
 import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
 import { handleSseEvent } from "./event-handler";
 import type { SseEvent } from "./sse-types";
 import type {
-  StreamResponse,
   TauriErrorPayload,
   Logger,
   TauriParamConfig,
+  EventNamesConfig,
 } from "../types";
 import type { ITauriInvoker, ITauriListener } from "../adapters/tauri-adapter";
 import type { EventNameStrategy } from "./event-name-strategy";
@@ -24,12 +23,18 @@ export class EventStreamHandler {
     commandName: string,
     input?: unknown,
     paramConfig?: TauriParamConfig,
+    eventsConfig?: EventNamesConfig,
   ): AsyncIterableIterator<T> {
     const iterator = new StreamIterator<T>();
 
     try {
-      const streamId = await this.startStream(commandName, input, paramConfig);
-      await this.setupListeners(streamId, iterator);
+      const streamId = await this.startStream(
+        commandName,
+        input,
+        paramConfig,
+        eventsConfig,
+      );
+      await this.setupListeners(streamId, iterator, eventsConfig);
       yield* this.consumeStream(iterator);
     } finally {
       iterator.cleanup();
@@ -40,6 +45,7 @@ export class EventStreamHandler {
     commandName: string,
     input?: unknown,
     paramConfig?: TauriParamConfig,
+    eventsConfig?: EventNamesConfig,
   ): Promise<string> {
     // Determine stream ID and parameter name
     const streamId =
@@ -50,12 +56,22 @@ export class EventStreamHandler {
     const paramName =
       paramConfig?.kind === "stream" ? paramConfig.name : "streamId";
 
-    // Build args with the custom parameter name
-    const streamParam = { [paramName]: streamId };
+    // Generate event names using custom config or default strategy
+    const eventNames = eventsConfig
+      ? eventsConfig.generator(streamId)
+      : this.eventNameStrategy.getEventNames(streamId);
+
+    const eventsParamName = eventsConfig?.paramName ?? "eventNames";
+
+    // Build args with stream param and event names
+    const streamParam = {
+      [paramName]: streamId,
+      [eventsParamName]: eventNames, // ← Custom param name for event names
+    };
+
     const args =
       input === undefined ? streamParam : { ...input, ...streamParam };
 
-    // Invoke command with stream parameter
     await this.invoker.invoke(commandName, args);
 
     return streamId;
@@ -79,8 +95,12 @@ export class EventStreamHandler {
   private async setupListeners<T>(
     streamId: string,
     iterator: StreamIterator<T>,
+    eventsConfig?: EventNamesConfig,
   ): Promise<void> {
-    const events = this.eventNameStrategy.getEventNames(streamId);
+    // Use custom generator or default strategy
+    const events = eventsConfig
+      ? eventsConfig.generator(streamId)
+      : this.eventNameStrategy.getEventNames(streamId);
 
     const unlistenData = await this.listener.listen<SseEvent<T>>(
       events.data,

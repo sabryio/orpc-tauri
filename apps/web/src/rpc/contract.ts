@@ -99,6 +99,7 @@ export const contract = {
   stream: {
     streamEvents: oc
       .meta(tauri.command("stream_events"))
+      .meta(tauri.transport("emit-listen"))
       .meta(
         tauri.param({
           kind: "stream",
@@ -106,13 +107,19 @@ export const contract = {
           value: crypto.randomUUID(),
         }),
       )
-      .meta(tauri.transport("emit-listen"))
+      .meta(
+        tauri.events(camelCase("event_names"), (streamId) => ({
+          data: `stream:${streamId}:data`,
+          done: `stream:${streamId}:done`,
+          error: `stream:${streamId}:error`,
+        })),
+      )
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
       .meta(tauri.command("stream_events_channel"))
-      .meta(tauri.param({ kind: "channel", name: camelCase("on_event") }))
       .meta(tauri.transport("channel"))
+      .meta(tauri.param({ kind: "channel", name: camelCase("on_event") }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },

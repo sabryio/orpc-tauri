@@ -1,4 +1,9 @@
-import type { TauriMeta, TauriParamConfig, MetaPlugin } from "./types";
+import type {
+  TauriMeta,
+  TauriParamConfig,
+  EventNamesConfig,
+  MetaPlugin,
+} from "./types";
 
 // ============================================================================
 // Merge Logic
@@ -30,6 +35,7 @@ function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
     command: incoming.command ?? current?.command,
     transport: incoming.transport ?? current?.transport,
     param: incoming.param ?? current?.param,
+    events: incoming.events ?? current?.events,
     timeout: incoming.timeout ?? current?.timeout,
     debug: incoming.debug ?? current?.debug,
     tags: mergeArrayField(incoming.tags, current?.tags),
@@ -53,6 +59,14 @@ export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
   command(command: string): MetaPlugin;
   transport(transport: TauriMeta["transport"]): MetaPlugin;
   param(config: TauriParamConfig): MetaPlugin;
+  events(
+    paramName: string,
+    generator: (streamId: string) => {
+      data: string;
+      done: string;
+      error: string;
+    },
+  ): MetaPlugin;
   timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
   debug(debug: TauriMeta["debug"]): MetaPlugin;
 };
@@ -66,6 +80,9 @@ tauri.command = (command): MetaPlugin => tauri({ command } as TauriMeta);
 tauri.transport = (transport): MetaPlugin => tauri({ transport } as TauriMeta);
 
 tauri.param = (config): MetaPlugin => tauri({ param: config } as TauriMeta);
+
+tauri.events = (paramName, generator): MetaPlugin =>
+  tauri({ events: { paramName, generator } } as TauriMeta);
 
 tauri.timeout = (timeout): MetaPlugin => tauri({ timeout } as TauriMeta);
 

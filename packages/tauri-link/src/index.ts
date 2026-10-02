@@ -6,6 +6,7 @@ export type { Logger } from "./logger";
 export type {
   TauriMeta,
   TauriParamConfig,
+  EventNamesConfig,
   TauriLinkOptions,
   MetaPlugin,
   Contract,
