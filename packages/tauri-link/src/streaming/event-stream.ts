@@ -5,10 +5,22 @@ import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
 import type { StreamResponse, TauriErrorPayload } from "../types";
 
-type StreamEventMessage<T> =
-  | { type: "flush" }
-  | { type: "data"; data: T }
-  | { type: "close" };
+/**
+ * Axum-style SSE Event structure
+ * Matches the Rust Event<T> type for seamless migration
+ */
+export interface SseEvent<T = unknown> {
+  /** Event name (maps to 'event:' field in SSE) */
+  event?: string;
+  /** Event ID (maps to 'id:' field in SSE) */
+  id?: string;
+  /** Retry timeout in milliseconds (maps to 'retry:' field in SSE) */
+  retry?: number;
+  /** Comment (maps to ':' field in SSE, used for keep-alive) */
+  comment?: string;
+  /** Event data payload (maps to 'data:' field in SSE) */
+  data?: T;
+}
 
 export class EventStreamHandler {
   async *createStream<T>(
@@ -60,25 +72,37 @@ export class EventStreamHandler {
     const doneEvent = `stream:${streamId}:done`;
     const errorEvent = `stream:${streamId}:error`;
 
-    const unlistenData = await listen<StreamEventMessage<T>>(
-      dataEvent,
-      (event) => {
-        const message = event.payload;
+    const unlistenData = await listen<SseEvent<T>>(dataEvent, (event) => {
+      const message = event.payload;
 
-        if (message.type === "flush") {
-          // Flush event - connection established, ignore
-          console.log(`[EventStream] Stream ${streamId} connected`);
-        } else if (message.type === "data") {
-          // Data event - push to iterator
-          iterator.push({ type: "value", value: message.data });
-        } else if (message.type === "close") {
-          // Close event - mark stream as finished
-          console.log(`[EventStream] Stream ${streamId} closed`);
-          iterator.markFinished();
-          iterator.push({ type: "done" });
+      // Handle based on event type (Axum-style)
+      if (message.comment === "flush") {
+        // Flush event - connection established, ignore
+        console.log(`[EventStream] Stream ${streamId} connected`);
+      } else if (message.event === "close") {
+        // Close event - mark stream as finished
+        console.log(`[EventStream] Stream ${streamId} closed`);
+        iterator.markFinished();
+        iterator.push({ type: "done" });
+      } else if (message.event === "message" && message.data !== undefined) {
+        // Data event - push to iterator
+        // Store event metadata on the value for getEventMeta() support
+        const value = message.data as T & {
+          __sse_event?: string;
+          __sse_id?: string;
+          __sse_retry?: number;
+        };
+        if (typeof value === "object" && value !== null) {
+          if (message.event) value.__sse_event = message.event;
+          if (message.id) value.__sse_id = message.id;
+          if (message.retry) value.__sse_retry = message.retry;
         }
-      },
-    );
+        iterator.push({ type: "value", value });
+      } else if (message.comment !== undefined) {
+        // Keep-alive or other comment - ignore
+        console.log(`[EventStream] Keep-alive for ${streamId}`);
+      }
+    });
     iterator.addUnlisten(unlistenData);
 
     const unlistenDone = await listen(doneEvent, () => {

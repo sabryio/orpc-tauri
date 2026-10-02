@@ -5,17 +5,15 @@ import type { TauriMeta, MetaPlugin } from "./types";
 // ============================================================================
 
 function mergeTauriMeta(
-  incoming: Partial<TauriMeta>,
+  incoming: TauriMeta,
   current?: TauriMeta,
 ): TauriMeta {
-  if (!incoming.command && !current?.command) {
-    throw new Error(
-      "[TauriLink] command is required. Use tauri.command('command_name') or tauri({ command: 'command_name' })",
-    );
-  }
-
   // Prevent overwriting existing command
-  if (incoming.command && current?.command && incoming.command !== current.command) {
+  if (
+    incoming.command &&
+    current?.command &&
+    incoming.command !== current.command
+  ) {
     throw new Error(
       `[TauriLink] Cannot change command from "${current.command}" to "${incoming.command}". Command can only be set once.`,
     );
@@ -36,9 +34,11 @@ function mergeTauriMeta(
         : current?.permissions;
 
   return {
-    command: (incoming.command ?? current?.command)!,
+    command: incoming.command ?? current?.command,
     transport:
-      incoming.transport !== undefined ? incoming.transport : current?.transport,
+      incoming.transport !== undefined
+        ? incoming.transport
+        : current?.transport,
     timeout:
       incoming.timeout !== undefined ? incoming.timeout : current?.timeout,
     debug: incoming.debug !== undefined ? incoming.debug : current?.debug,
@@ -51,7 +51,7 @@ function mergeTauriMeta(
 // Main Plugin Function
 // ============================================================================
 
-export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
+export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
   name: "~tauri" as const,
   init(meta: Record<string, unknown>) {
     const existing = meta["~tauri"] as TauriMeta | undefined;
@@ -59,7 +59,7 @@ export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
     return { ...meta, "~tauri": merged };
   },
 })) as {
-  (meta?: Partial<TauriMeta>): MetaPlugin;
+  (meta: TauriMeta): MetaPlugin;
   command(command: string): MetaPlugin;
   transport(transport: TauriMeta["transport"]): MetaPlugin;
   timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
@@ -70,50 +70,14 @@ export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
 // Scoped Helpers
 // ============================================================================
 
-tauri.command = (command): MetaPlugin =>
-  tauri({ command });
+tauri.command = (command): MetaPlugin => tauri({ command } as TauriMeta);
 
-tauri.transport = (transport): MetaPlugin => ({
-  name: "~tauri/transport" as const,
-  init(meta: Record<string, unknown>) {
-    const existing = meta["~tauri"] as TauriMeta | undefined;
-    if (!existing?.command) {
-      throw new Error(
-        "[TauriLink] tauri.transport() requires tauri.command() to be called first",
-      );
-    }
-    const merged = mergeTauriMeta({ transport }, existing);
-    return { ...meta, "~tauri": merged };
-  },
-});
+tauri.transport = (transport): MetaPlugin =>
+  tauri({ transport } as TauriMeta);
 
-tauri.timeout = (timeout): MetaPlugin => ({
-  name: "~tauri/timeout" as const,
-  init(meta: Record<string, unknown>) {
-    const existing = meta["~tauri"] as TauriMeta | undefined;
-    if (!existing?.command) {
-      throw new Error(
-        "[TauriLink] tauri.timeout() requires tauri.command() to be called first",
-      );
-    }
-    const merged = mergeTauriMeta({ timeout }, existing);
-    return { ...meta, "~tauri": merged };
-  },
-});
+tauri.timeout = (timeout): MetaPlugin => tauri({ timeout } as TauriMeta);
 
-tauri.debug = (debug): MetaPlugin => ({
-  name: "~tauri/debug" as const,
-  init(meta: Record<string, unknown>) {
-    const existing = meta["~tauri"] as TauriMeta | undefined;
-    if (!existing?.command) {
-      throw new Error(
-        "[TauriLink] tauri.debug() requires tauri.command() to be called first",
-      );
-    }
-    const merged = mergeTauriMeta({ debug }, existing);
-    return { ...meta, "~tauri": merged };
-  },
-});
+tauri.debug = (debug): MetaPlugin => tauri({ debug } as TauriMeta);
 
 // ============================================================================
 // Helper Functions
@@ -125,7 +89,9 @@ tauri.debug = (debug): MetaPlugin => ({
 export function extractTauriMeta(
   procedure: Record<string, unknown>,
 ): TauriMeta | undefined {
-  const orpcMeta = procedure["~orpc"] as { meta?: { "~tauri"?: TauriMeta } } | undefined;
+  const orpcMeta = procedure["~orpc"] as
+    | { meta?: { "~tauri"?: TauriMeta } }
+    | undefined;
   return orpcMeta?.meta?.["~tauri"];
 }
 

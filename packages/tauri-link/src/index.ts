@@ -12,3 +12,4 @@ export type {
   ChannelEvent,
   TauriErrorPayload,
 } from "./types";
+export type { SseEvent } from "./streaming/event-stream";

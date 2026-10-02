@@ -4,6 +4,7 @@ import {
   isDefinedError,
   ORPCError,
   safe,
+  getEventMeta
 } from "@orpc/client";
 import { type RouterContractClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
