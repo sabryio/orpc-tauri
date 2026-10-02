@@ -104,7 +104,7 @@ export const contract = {
           kind: "stream",
           id: {
             name: camelCase("stream_id"),
-            value: crypto.randomUUID(),
+            value: () => crypto.randomUUID(),
           },
           events: {
             name: camelCase("event_names"),

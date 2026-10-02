@@ -10,7 +10,7 @@ export type Contract = Record<string, unknown>;
 export type TauriTransportConfig =
   | {
       kind: "stream";
-      id: { name: string; value: string };
+      id: { name: string; value: string | (() => string) };
       events: {
         name: string;
         generator: (streamId: string) => {

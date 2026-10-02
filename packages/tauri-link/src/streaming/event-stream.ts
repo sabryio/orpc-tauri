@@ -44,7 +44,10 @@ export class EventStreamHandler {
       throw new Error("EventStreamHandler requires stream transport config");
     }
 
-    const streamId = transportConfig.id.value;
+    // Resolve stream ID - call function if it's a generator
+    const streamIdValue = transportConfig.id.value;
+    const streamId =
+      typeof streamIdValue === "function" ? streamIdValue() : streamIdValue;
     const paramName = transportConfig.id.name;
 
     // Generate event names using custom config or default strategy
