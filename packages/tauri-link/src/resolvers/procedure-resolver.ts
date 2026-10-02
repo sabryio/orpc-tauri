@@ -25,6 +25,14 @@ export class ProcedureResolver {
       });
     }
 
+    const tauriMeta = extractTauriMeta(procedure);
+
+    // Priority 1: Check for explicit Tauri command name override
+    if (tauriMeta?.command) {
+      return tauriMeta.command;
+    }
+
+    // Priority 2: Fall back to OpenAPI path (if available)
     const meta = (procedure["~orpc"] as ORPCMeta | undefined)?.meta?.[
       "~openapi"
     ];
@@ -32,13 +40,11 @@ export class ProcedureResolver {
 
     if (!commandPath) {
       throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
-        message: `No openapi path found for procedure: ${path.join(".")}`,
+        message: `No command name found for procedure: ${path.join(".")}. Add tauri({ command: "..." }) or openapi({ path: "..." }) metadata.`,
       });
     }
 
-    return commandPath.startsWith("/")
-      ? commandPath.substring(1)
-      : commandPath;
+    return commandPath.startsWith("/") ? commandPath.substring(1) : commandPath;
   }
 
   isStreaming(path: string[]): boolean {

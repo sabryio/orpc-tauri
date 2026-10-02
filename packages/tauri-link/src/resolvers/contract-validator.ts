@@ -1,3 +1,4 @@
+import { extractTauriMeta } from "../metadata";
 import type { Contract, ORPCMeta } from "../types";
 
 export class ContractValidator {
@@ -18,24 +19,32 @@ export class ContractValidator {
     const orpcMeta = (obj as Record<string, unknown>)["~orpc"] as
       | ORPCMeta
       | undefined;
-    const openApiPath = orpcMeta?.meta?.["~openapi"]?.path;
 
-    if (openApiPath) {
-      const commandName = this.normalizeCommandName(openApiPath);
-      const procedurePath = path.join(".");
+    if (orpcMeta) {
+      const tauriMeta = extractTauriMeta(obj as Record<string, unknown>);
+      const openApiPath = orpcMeta.meta?.["~openapi"]?.path;
 
-      if (commandMap.has(commandName)) {
-        const existingPath = commandMap.get(commandName)!.join(".");
-        throw new Error(
-          `[TauriLink] Duplicate command name detected: "${commandName}"\n` +
-            `  - First defined at: ${existingPath}\n` +
-            `  - Duplicate found at: ${procedurePath}\n` +
-            `Each Tauri command must have a unique OpenAPI path.`,
-        );
+      // Priority 1: Tauri command name
+      // Priority 2: OpenAPI path
+      const commandName = tauriMeta?.command || openApiPath;
+
+      if (commandName) {
+        const normalizedName = this.normalizeCommandName(commandName);
+        const procedurePath = path.join(".");
+
+        if (commandMap.has(normalizedName)) {
+          const existingPath = commandMap.get(normalizedName)!.join(".");
+          throw new Error(
+            `[TauriLink] Duplicate command name detected: "${normalizedName}"\n` +
+              `  - First defined at: ${existingPath}\n` +
+              `  - Duplicate found at: ${procedurePath}\n` +
+              `Each Tauri command must have a unique name.`,
+          );
+        }
+
+        commandMap.set(normalizedName, path);
+        this.commandNames.add(normalizedName);
       }
-
-      commandMap.set(commandName, path);
-      this.commandNames.add(commandName);
     }
 
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
