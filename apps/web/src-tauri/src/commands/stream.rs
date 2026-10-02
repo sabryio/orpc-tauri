@@ -67,14 +67,8 @@ pub async fn stream_events(app: AppHandle, stream_id: String, event_names: Event
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
-        // 3. CLOSE: Signal stream completion (Axum-style)
-        log::info!("Sending close event for stream: {}", stream_id);
-        let close_event: Event<()> = Event::default().event("close");
-        if let Err(e) = app.emit(&event_names.data, &close_event) {
-            log::error!("Failed to emit close event: {:?}", e);
-        }
-
-        // Send done event for cleanup
+        // 3. DONE: Signal stream completion
+        log::info!("Sending done event for stream: {}", stream_id);
         if let Err(e) = app.emit(&event_names.done, ()) {
             log::error!("Failed to emit done event: {:?}", e);
         }

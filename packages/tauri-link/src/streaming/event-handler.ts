@@ -11,10 +11,6 @@ export function handleSseEvent<T>(
 ): void {
   if (message.comment === "flush") {
     logger.log(`[Stream] ${streamId} connected`);
-  } else if (message.event === "close") {
-    logger.log(`[Stream] ${streamId} closed`);
-    iterator.markFinished();
-    iterator.push({ type: "done" });
   } else if (message.event === "message" && message.data !== undefined) {
     const value = message.data as T;
     attachEventMeta(value, message);
