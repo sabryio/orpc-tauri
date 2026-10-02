@@ -1,3 +1,6 @@
+mod commands;
+mod types;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -11,6 +14,16 @@ pub fn run() {
       }
       Ok(())
     })
+    .manage(commands::planet::PlanetStore::new())
+    .invoke_handler(tauri::generate_handler![
+      commands::ping::ping,
+      commands::planet::create_planet,
+      commands::planet::find_planet,
+      commands::planet::delete_planet,
+      commands::planet::list_planets,
+      commands::planet::list_planets_paginated,
+      commands::stream::stream_events,
+    ])
     .run(tauri::generate_context!())
     .expect("error while building tauri application");
 }

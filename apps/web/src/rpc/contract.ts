@@ -74,12 +74,12 @@ export const contract = {
   },
   planet: {
     deletePlanet: oc
-      .meta(openapi({ method: "DELETE", path: "/planet/{id}" }))
+      .meta(openapi({ method: "DELETE", path: "/delete_planet" }))
       .input(z.object({ id: z.number().int() }))
       .output(z.void())
       .errors(StandardApiErrors),
     createPlanet: oc
-      .meta(openapi({ method: "POST", path: "/planet/" }))
+      .meta(openapi({ method: "POST", path: "/create_planet" }))
       .input(
         z.object({
           name: z.string(),
@@ -89,12 +89,12 @@ export const contract = {
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     findPlanet: oc
-      .meta(openapi({ method: "GET", path: "/planet/{id}" }))
+      .meta(openapi({ method: "GET", path: "/find_planet" }))
       .input(z.object({ id: z.number().int(), q: z.string().optional() }))
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     listPlanetsPaginated: oc
-      .meta(openapi({ method: "GET", path: "/planet/list-paginated" }))
+      .meta(openapi({ method: "GET", path: "/list_planets_paginated" }))
       .input(
         z.object({
           limit: z.number().int(),
@@ -109,14 +109,14 @@ export const contract = {
       )
       .errors(StandardApiErrors),
     listPlanets: oc
-      .meta(openapi({ method: "GET", path: "/planet/list" }))
+      .meta(openapi({ method: "GET", path: "/list_planets" }))
       .input(z.void())
       .output(z.array(PlanetSchema))
       .errors(StandardApiErrors),
   },
   stream: {
     streamEvents: oc
-      .meta(openapi({ method: "GET", path: "/stream" }))
+      .meta(openapi({ method: "GET", path: "/stream_events" }))
       .input(z.void())
       .output(
         asyncIteratorObject(

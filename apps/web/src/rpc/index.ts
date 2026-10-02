@@ -1,22 +1,23 @@
-import { createORPCClient, isDefinedError, ORPCError } from "@orpc/client";
+import {
+  createORPCClient,
+  createSafeClient,
+  isDefinedError,
+  ORPCError,
+  safe,
+} from "@orpc/client";
 import { type RouterContractClient } from "@orpc/contract";
-import { OpenAPILink } from "@orpc/openapi/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { contract } from "./contract";
+import { TauriLink } from "./tauri-link";
 export { consumeAsyncIterator, getEventMeta } from "@orpc/client";
 
-const link = new OpenAPILink(contract, {
-  origin: "http://localhost:3001",
-  url: "/rpc",
-  fetch(url, init, options, path) {
-    console.log({ url, init, options, path });
-    return globalThis.fetch(url);
-  },
-});
+const link = new TauriLink(contract);
 
 export const client: RouterContractClient<typeof contract> =
   createORPCClient(link);
 
+export const safeClient = createSafeClient(client);
+
 export const orpc = createTanstackQueryUtils(client);
 
-export { isDefinedError, ORPCError };
+export { isDefinedError, ORPCError, safe };
