@@ -1,6 +1,11 @@
 import { Button } from "@tauri-orpc-contract/ui/components/button";
 import { Card } from "@tauri-orpc-contract/ui/components/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tauri-orpc-contract/ui/components/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@tauri-orpc-contract/ui/components/tabs";
 import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
 import { Play } from "lucide-react";
 import { EventCard } from "./event-card";
@@ -22,10 +27,16 @@ export function AdvancedTab({ streamedQuery, liveQuery }: AdvancedTabProps) {
   return (
     <Tabs defaultValue="streamed" className="h-full flex flex-col">
       <TabsList className="mb-4 bg-card border border-primary/30">
-        <TabsTrigger value="streamed" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+        <TabsTrigger
+          value="streamed"
+          className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
+        >
           Streamed Query
         </TabsTrigger>
-        <TabsTrigger value="live" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+        <TabsTrigger
+          value="live"
+          className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
+        >
           Live Query
         </TabsTrigger>
       </TabsList>
@@ -33,7 +44,9 @@ export function AdvancedTab({ streamedQuery, liveQuery }: AdvancedTabProps) {
       <TabsContent value="streamed" className="flex flex-col flex-1 min-h-0">
         <Card className="p-6 border-primary/30 bg-card flex flex-col flex-1 min-h-0">
           <div className="flex items-center justify-between mb-4 flex-none">
-            <h3 className="text-sm font-semibold text-primary">useQuery Streamed Pattern</h3>
+            <h3 className="text-sm font-semibold text-primary">
+              useQuery Streamed Pattern
+            </h3>
             <Button
               onClick={() => streamedQuery.refetch()}
               disabled={streamedQuery.isFetching}
@@ -68,7 +81,9 @@ export function AdvancedTab({ streamedQuery, liveQuery }: AdvancedTabProps) {
       <TabsContent value="live" className="flex flex-col flex-1 min-h-0">
         <Card className="p-6 border-primary/30 bg-card flex flex-col flex-1 min-h-0">
           <div className="flex items-center justify-between mb-4 flex-none">
-            <h3 className="text-sm font-semibold text-primary">useQuery Live Pattern (Latest Only)</h3>
+            <h3 className="text-sm font-semibold text-primary">
+              useQuery Live Pattern (Latest Only)
+            </h3>
             <Button
               onClick={() => liveQuery.refetch()}
               disabled={liveQuery.isFetching}
@@ -85,7 +100,9 @@ export function AdvancedTab({ streamedQuery, liveQuery }: AdvancedTabProps) {
           )}
           {liveQuery.data && (
             <div className="flex-none">
-              <p className="text-xs text-muted-foreground mb-2">Latest Event:</p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Latest Event:
+              </p>
               <EventCard event={liveQuery.data} index={0} />
             </div>
           )}
