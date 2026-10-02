@@ -9,7 +9,6 @@ export type {
   Contract,
   CallOptions,
   StreamEvent,
-  ChannelEvent,
   TauriErrorPayload,
 } from "./types";
-export type { SseEvent } from "./streaming/event-stream";
+export type { SseEvent } from "./streaming/sse-types";

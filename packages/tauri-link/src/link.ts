@@ -1,21 +1,42 @@
-import { invoke } from "@tauri-apps/api/core";
 import { ORPCError } from "@orpc/client";
 import { ContractValidator } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
 import { EventStreamHandler } from "./streaming/event-stream";
 import { ChannelStreamHandler } from "./streaming/channel-stream";
 import { ErrorHandler } from "./errors/error-handler";
-import type { Contract, CallOptions } from "./types";
+import { ConsoleLogger } from "./logger";
+import {
+  TauriAdapter,
+  TauriChannelFactory,
+  type ITauriInvoker,
+} from "./adapters/tauri-adapter";
+import type { Contract, CallOptions, TauriLinkOptions, Logger } from "./types";
 
 export class TauriLink<TContext = unknown> {
   private readonly resolver: ProcedureResolver;
   private readonly eventStream: EventStreamHandler;
   private readonly channelStream: ChannelStreamHandler;
+  private readonly invoker: ITauriInvoker;
+  private readonly logger: Logger;
 
-  constructor(contract: Contract) {
+  constructor(contract: Contract, options?: TauriLinkOptions) {
+    this.logger = options?.logger ?? new ConsoleLogger();
+    this.invoker = new TauriAdapter();
+
+    const listener = new TauriAdapter();
+    const channelFactory = new TauriChannelFactory();
+
     this.resolver = new ProcedureResolver(contract);
-    this.eventStream = new EventStreamHandler();
-    this.channelStream = new ChannelStreamHandler();
+    this.eventStream = new EventStreamHandler(
+      this.invoker,
+      listener,
+      this.logger,
+    );
+    this.channelStream = new ChannelStreamHandler(
+      this.invoker,
+      channelFactory,
+      this.logger,
+    );
 
     new ContractValidator().validate(contract);
   }
@@ -29,7 +50,10 @@ export class TauriLink<TContext = unknown> {
     const debug = this.resolver.getDebug(path);
 
     if (debug) {
-      console.log(`[TauriLink] ${commandName}`, { input, path: path.join(".") });
+      this.logger.log(`[TauriLink] ${commandName}`, {
+        input,
+        path: path.join("."),
+      });
     }
 
     if (callOptions?.signal?.aborted) {
@@ -58,13 +82,13 @@ export class TauriLink<TContext = unknown> {
       const result = await this.invokeCommand<TInput, TOutput>(commandName, input);
 
       if (debug) {
-        console.log(`[TauriLink] ${commandName} →`, result);
+        this.logger.log(`[TauriLink] ${commandName} →`, result);
       }
 
       return result;
     } catch (error) {
       if (debug) {
-        console.error(`[TauriLink] ${commandName} ✗`, error);
+        this.logger.error(`[TauriLink] ${commandName} ✗`, error);
       }
       throw ErrorHandler.toORPCError(error, `${commandName} failed`);
     }
@@ -76,6 +100,6 @@ export class TauriLink<TContext = unknown> {
   ): Promise<TOutput> {
     const args =
       input === undefined ? {} : { input: input === null ? null : input };
-    return await invoke<TOutput>(commandName, args);
+    return await this.invoker.invoke<TOutput>(commandName, args);
   }
 }
