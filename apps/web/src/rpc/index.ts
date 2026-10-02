@@ -18,8 +18,8 @@ const link = new TauriLink(contract);
 export const client: RouterContractClient<typeof contract> =
   createORPCClient(link);
 
-export const safeClient = createSafeClient(client);
+// const safeClient = createSafeClient(client);
 
 export const orpc = createTanstackQueryUtils(client);
 
-export { isDefinedError, ORPCError, safe };
+export { isDefinedError, ORPCError };

@@ -1,144 +1,179 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "@tauri-orpc-contract/ui/components/button";
 import { Card } from "@tauri-orpc-contract/ui/components/card";
 import { Input } from "@tauri-orpc-contract/ui/components/input";
 import { Label } from "@tauri-orpc-contract/ui/components/label";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 
-import { client, getEventMeta, isDefinedError, orpc } from "@/rpc";
+import { client, getEventMeta, isDefinedError, orpc, consumeAsyncIterator } from "@/rpc";
+import { useStreamEvents } from "./use-stream-events";
+import { mutationHandlers } from "./use-mutation-handlers";
 
 export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
+
+function EventCard({ event, index }: { event: { message: string; count: number }; index: number }) {
+  const meta = getEventMeta(event);
+  return (
+    <div key={index} className="p-3 bg-muted rounded-md">
+      <p className="text-sm">
+        <strong>Message:</strong> {event.message}
+      </p>
+      <p className="text-sm">
+        <strong>Count:</strong> {event.count}
+      </p>
+      {meta && (
+        <>
+          {meta.id && (
+            <p className="text-sm text-muted-foreground">
+              <strong>Event ID:</strong> {meta.id}
+            </p>
+          )}
+          {meta.retry && (
+            <p className="text-sm text-muted-foreground">
+              <strong>Retry:</strong> {meta.retry}ms
+            </p>
+          )}
+          {meta.comments && meta.comments.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              <strong>Comments:</strong> {meta.comments.join(", ")}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function HomeComponent() {
   const queryClient = useQueryClient();
   const [planetName, setPlanetName] = useState("");
   const [planetDescription, setPlanetDescription] = useState("");
   const [findId, setFindId] = useState("");
-  const [streamEvents, setStreamEvents] = useState<
-    Array<{ message: string; count: number }>
-  >([]);
-  const [channelStreamEvents, setChannelStreamEvents] = useState<
-    Array<{ message: string; count: number }>
-  >([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isChannelStreaming, setIsChannelStreaming] = useState(false);
+
+  const stream = useStreamEvents<{ message: string; count: number }>();
+  const channelStream = useStreamEvents<{ message: string; count: number }>();
+
+  // Async iterator pattern state
+  const [asyncEvents, setAsyncEvents] = useState<Array<{ message: string; count: number; id?: string; retry?: number }>>([]);
+  const [asyncStreaming, setAsyncStreaming] = useState(false);
+  const [asyncError, setAsyncError] = useState<string | null>(null);
+  const [asyncFinished, setAsyncFinished] = useState(false);
+  const cancelRef = useRef<(() => void) | null>(null);
+
+  // useQuery streamed pattern
+  const streamedQuery = useQuery(
+    orpc.stream.streamEvents.streamedOptions({ retry: false, enabled: false }),
+  );
+
+  // useQuery live pattern (latest event only)
+  const liveQuery = useQuery(
+    orpc.stream.streamEvents.liveOptions({ retry: false, enabled: false }),
+  );
 
   const pingQuery = useQuery(orpc.ping.ping.queryOptions());
 
-  const planetsQuery = useQuery(orpc.planet.listPlanets.queryOptions());
+  const planetsQuery = useInfiniteQuery(
+    orpc.planet.listPlanetsPaginated.infiniteOptions({
+      input: (pageParam: number | undefined) => ({
+        limit: 10,
+        offset: pageParam ?? 0,
+      }),
+      initialPageParam: undefined,
+      getNextPageParam: (lastPage) => lastPage.next_page_param,
+    }),
+  );
 
   const createPlanetMutation = useMutation(
-    orpc.planet.createPlanet.mutationOptions({
-      onSuccess: (data) => {
-        toast.success(`Planet created: ${data.name}`);
-        setPlanetName("");
-        setPlanetDescription("");
-        queryClient.invalidateQueries({ queryKey: orpc.planet.key() });
-      },
-      onError: (error) => {
-        if (isDefinedError(error)) {
-          toast.error(`Error: ${error.message}`);
-        } else {
-          toast.error("Failed to create planet");
-        }
-      },
-    }),
+    orpc.planet.createPlanet.mutationOptions(
+      mutationHandlers(
+        "Planet created",
+        "Failed to create planet",
+        () => {
+          setPlanetName("");
+          setPlanetDescription("");
+          queryClient.invalidateQueries({ queryKey: orpc.planet.key() });
+        },
+      ),
+    ),
   );
 
   const findPlanetMutation = useMutation(
     orpc.planet.findPlanet.mutationOptions({
-      onSuccess: (data) => {
-        toast.success(`Found planet: ${data.name}`);
-      },
+      onSuccess: (data) => toast.success(`Found planet: ${data.name}`),
       onError: (error) => {
         console.log("Error: ", JSON.stringify(error));
-
-        if (isDefinedError(error)) {
-          // This is a defined error from the contract
-          toast.error(`Contract Error [${error.code}]: ${error.message}`);
-        } else {
-          // This is an undefined/unexpected error
-          toast.error(
-            `Unexpected Error: ${error.message || "Failed to find planet"}`,
-          );
-        }
+        toast.error(
+          isDefinedError(error)
+            ? `Contract Error [${error.code}]: ${error.message}`
+            : `Unexpected Error: ${error.message || "Failed to find planet"}`,
+        );
       },
     }),
   );
 
   const deletePlanetMutation = useMutation(
-    orpc.planet.deletePlanet.mutationOptions({
-      onSuccess: () => {
-        toast.success("Planet deleted");
-        queryClient.invalidateQueries({ queryKey: orpc.planet.key() });
-      },
-      onError: (error) => {
-        if (isDefinedError(error)) {
-          toast.error(`Error: ${error.message}`);
-        } else {
-          toast.error("Failed to delete planet");
-        }
-      },
-    }),
+    orpc.planet.deletePlanet.mutationOptions(
+      mutationHandlers("Planet deleted", "Failed to delete planet", () =>
+        queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
+      ),
+    ),
   );
 
-  const handleStreamEvents = async () => {
-    setIsStreaming(true);
-    setStreamEvents([]);
-    const controller = new AbortController();
+  const handleStreamEvents = () =>
+    stream.startStream(
+      () => client.stream.streamEvents(undefined, { signal: new AbortController().signal }),
+      "Stream completed!",
+    );
 
-    try {
-      const iterator = await client.stream.streamEvents(undefined, {
-        signal: controller.signal,
-      });
+  const handleChannelStreamEvents = () =>
+    channelStream.startStream(
+      () => client.stream.streamEventsChannel(undefined, { signal: new AbortController().signal }),
+      "Channel stream completed!",
+    );
 
-      for await (const event of iterator) {
-        console.log("Received stream event:", event);
-        setStreamEvents((prev) => [...prev, event]);
-      }
+  const handleAsyncIteratorStream = () => {
+    setAsyncStreaming(true);
+    setAsyncEvents([]);
+    setAsyncError(null);
+    setAsyncFinished(false);
 
-      toast.success("Stream completed!");
-    } catch (error) {
-      console.error("Stream error:", error);
-      if (isDefinedError(error)) {
-        toast.error(`Stream error: ${error}`);
-      } else {
-        toast.error("Stream failed");
-      }
-    } finally {
-      setIsStreaming(false);
-    }
+    const cancel = consumeAsyncIterator(client.stream.streamEvents(), {
+      onEvent: (event) => {
+        const meta = getEventMeta(event);
+        setAsyncEvents((prev) => [
+          ...prev,
+          { ...event, id: meta?.id, retry: meta?.retry },
+        ]);
+      },
+      onError: (err) => {
+        setAsyncError(String(err));
+        setAsyncStreaming(false);
+        toast.error("Async stream failed");
+      },
+      onSuccess: (value) => {
+        console.log("Stream completed successfully:", value);
+        setAsyncStreaming(false);
+        toast.success("Async stream completed!");
+      },
+      onFinish: (state) => {
+        console.log("Stream finished with state:", state);
+        setAsyncFinished(true);
+        setAsyncStreaming(false);
+        cancelRef.current = null;
+      },
+    });
+
+    cancelRef.current = cancel;
   };
 
-  const handleChannelStreamEvents = async () => {
-    setIsChannelStreaming(true);
-    setChannelStreamEvents([]);
-    const controller = new AbortController();
-
-    try {
-      const iterator = await client.stream.streamEventsChannel(undefined, {
-        signal: controller.signal,
-      });
-
-      for await (const event of iterator) {
-        console.log("Received channel stream event:", event);
-        setChannelStreamEvents((prev) => [...prev, event]);
-      }
-
-      toast.success("Channel stream completed!");
-    } catch (error) {
-      console.error("Channel stream error:", error);
-      if (isDefinedError(error)) {
-        toast.error(`Channel stream error: ${error}`);
-      } else {
-        toast.error("Channel stream failed");
-      }
-    } finally {
-      setIsChannelStreaming(false);
+  const handleCancelAsyncStream = () => {
+    if (cancelRef.current) {
+      cancelRef.current();
+      toast.info("Stream cancelled");
     }
   };
 
@@ -253,14 +288,31 @@ function HomeComponent() {
           <h2 className="text-xl font-semibold mb-4">All Planets</h2>
           <div className="space-y-4">
             <Button
-              onClick={() => planetsQuery.refetch()}
+              onClick={() => {
+                console.log("Current planetsQuery.data:", planetsQuery.data);
+                planetsQuery.refetch();
+              }}
               disabled={planetsQuery.isFetching}
             >
               {planetsQuery.isFetching ? "Loading..." : "Refresh List"}
             </Button>
-            {planetsQuery.data && planetsQuery.data.length > 0 ? (
+            {(() => {
+              console.log("planetsQuery full state:", {
+                data: planetsQuery.data,
+                pages: planetsQuery.data?.pages,
+                error: planetsQuery.error,
+                status: planetsQuery.status,
+              });
+              const allPlanets = planetsQuery.data?.pages?.flatMap(p => {
+                console.log("Page:", p);
+                return p.items || [];
+              }) || [];
+              console.log("All planets:", allPlanets);
+              return allPlanets.length > 0 ? (
               <div className="space-y-2">
-                {planetsQuery.data.map((planet) => (
+                {allPlanets.map((planet) => {
+                  console.log("Rendering planet:", planet);
+                  return (
                   <div
                     key={planet.id}
                     className="flex items-center justify-between p-4 bg-muted rounded-md"
@@ -284,59 +336,40 @@ function HomeComponent() {
                       Delete
                     </Button>
                   </div>
-                ))}
+                  );
+                })}
+                {planetsQuery.hasNextPage && (
+                  <Button
+                    onClick={() => planetsQuery.fetchNextPage()}
+                    disabled={planetsQuery.isFetchingNextPage}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {planetsQuery.isFetchingNextPage ? "Loading more..." : "Load More"}
+                  </Button>
+                )}
               </div>
             ) : (
               <p className="text-muted-foreground">
                 No planets yet. Create one above!
               </p>
-            )}
+            );
+            })()}
           </div>
         </Card>
 
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Stream Events Test</h2>
           <div className="space-y-4">
-            <Button onClick={handleStreamEvents} disabled={isStreaming}>
-              {isStreaming ? "Streaming..." : "Start Stream"}
+            <Button onClick={handleStreamEvents} disabled={stream.isStreaming}>
+              {stream.isStreaming ? "Streaming..." : "Start Stream"}
             </Button>
-            {streamEvents.length > 0 && (
+            {stream.events.length > 0 && (
               <div className="space-y-2">
                 <p className="font-semibold">Received Events:</p>
-                {streamEvents.map((event, index) => {
-                  // Get SSE event metadata (id, retry, comments)
-                  const meta = getEventMeta(event);
-                  return (
-                    <div key={index} className="p-3 bg-muted rounded-md">
-                      <p className="text-sm">
-                        <strong>Message:</strong> {event.message}
-                      </p>
-                      <p className="text-sm">
-                        <strong>Count:</strong> {event.count}
-                      </p>
-                      {meta && (
-                        <>
-                          {meta.id && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Event ID:</strong> {meta.id}
-                            </p>
-                          )}
-                          {meta.retry && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Retry:</strong> {meta.retry}ms
-                            </p>
-                          )}
-                          {meta.comments && meta.comments.length > 0 && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Comments:</strong>{" "}
-                              {meta.comments.join(", ")}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                {stream.events.map((event, index) => (
+                  <EventCard key={index} event={event} index={index} />
+                ))}
               </div>
             )}
           </div>
@@ -349,47 +382,127 @@ function HomeComponent() {
           <div className="space-y-4">
             <Button
               onClick={handleChannelStreamEvents}
-              disabled={isChannelStreaming}
+              disabled={channelStream.isStreaming}
             >
-              {isChannelStreaming ? "Streaming..." : "Start Channel Stream"}
+              {channelStream.isStreaming ? "Streaming..." : "Start Channel Stream"}
             </Button>
-            {channelStreamEvents.length > 0 && (
+            {channelStream.events.length > 0 && (
               <div className="space-y-2">
                 <p className="font-semibold">Received Channel Events:</p>
-                {channelStreamEvents.map((event, index) => {
-                  // Get SSE event metadata (id, retry, comments)
-                  const meta = getEventMeta(event);
-                  return (
-                    <div key={index} className="p-3 bg-muted rounded-md">
-                      <p className="text-sm">
-                        <strong>Message:</strong> {event.message}
+                {channelStream.events.map((event, index) => (
+                  <EventCard key={index} event={event} index={index} />
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">
+            Async Iterator Pattern Test
+          </h2>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                onClick={handleAsyncIteratorStream}
+                disabled={asyncStreaming}
+              >
+                {asyncStreaming ? "Streaming..." : "Start Async Stream"}
+              </Button>
+              {asyncStreaming && (
+                <Button
+                  onClick={handleCancelAsyncStream}
+                  variant="destructive"
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
+            {asyncError && (
+              <div className="p-3 bg-destructive/10 text-destructive rounded-md">
+                <strong>Error:</strong> {asyncError}
+              </div>
+            )}
+            {asyncFinished && (
+              <div className="p-3 bg-green-500/10 text-green-500 rounded-md">
+                Stream finished
+              </div>
+            )}
+            {asyncEvents.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold">Received Async Events:</p>
+                {asyncEvents.map((event, index) => (
+                  <div key={index} className="p-3 bg-muted rounded-md">
+                    <p className="text-sm">
+                      <strong>Message:</strong> {event.message}
+                    </p>
+                    <p className="text-sm">
+                      <strong>Count:</strong> {event.count}
+                    </p>
+                    {event.id && (
+                      <p className="text-sm text-muted-foreground">
+                        <strong>Event ID:</strong> {event.id}
                       </p>
-                      <p className="text-sm">
-                        <strong>Count:</strong> {event.count}
+                    )}
+                    {event.retry && (
+                      <p className="text-sm text-muted-foreground">
+                        <strong>Retry:</strong> {event.retry}ms
                       </p>
-                      {meta && (
-                        <>
-                          {meta.id && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Event ID:</strong> {meta.id}
-                            </p>
-                          )}
-                          {meta.retry && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Retry:</strong> {meta.retry}ms
-                            </p>
-                          )}
-                          {meta.comments && meta.comments.length > 0 && (
-                            <p className="text-sm text-muted-foreground">
-                              <strong>Comments:</strong>{" "}
-                              {meta.comments.join(", ")}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">
+            useQuery Streamed Pattern Test
+          </h2>
+          <div className="space-y-4">
+            <Button
+              onClick={() => streamedQuery.refetch()}
+              disabled={streamedQuery.isFetching}
+            >
+              {streamedQuery.isFetching ? "Streaming..." : "Start Streamed Query"}
+            </Button>
+            {streamedQuery.error && (
+              <div className="p-3 bg-destructive/10 text-destructive rounded-md">
+                <strong>Error:</strong> {String(streamedQuery.error)}
+              </div>
+            )}
+            {streamedQuery.data && streamedQuery.data.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold">Received Query Events ({streamedQuery.data.length}):</p>
+                {streamedQuery.data.map((event, index) => (
+                  <EventCard key={index} event={event} index={index} />
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">
+            useQuery Live Pattern Test (Latest Only)
+          </h2>
+          <div className="space-y-4">
+            <Button
+              onClick={() => liveQuery.refetch()}
+              disabled={liveQuery.isFetching}
+            >
+              {liveQuery.isFetching ? "Streaming..." : "Start Live Query"}
+            </Button>
+            {liveQuery.error && (
+              <div className="p-3 bg-destructive/10 text-destructive rounded-md">
+                <strong>Error:</strong> {String(liveQuery.error)}
+              </div>
+            )}
+            {liveQuery.data && (
+              <div className="space-y-2">
+                <p className="font-semibold">Latest Event:</p>
+                <EventCard event={liveQuery.data} index={0} />
               </div>
             )}
           </div>

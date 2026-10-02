@@ -4,7 +4,7 @@ import { asyncIteratorObject } from "@orpc/contract";
 import { tauri } from "@tauri-orpc-contract/tauri-link";
 import { camelCase } from "change-case";
 
-export const PlanetSchema = z.object({
+const PlanetSchema = z.object({
   id: z.number().int(),
   name: z.string(),
   description: z.string().optional(),
@@ -14,12 +14,12 @@ export const PlanetSchema = z.object({
 // SSE Event Types
 // ============================================================================
 
-export const SseEventSchema = z.object({
+const SseEventSchema = z.object({
   message: z.string(),
   count: z.number().int(),
 });
 
-export type SseEvent = z.infer<typeof SseEventSchema>;
+type SseEvent = z.infer<typeof SseEventSchema>;
 
 // ============================================================================
 // Domain Types - Ping

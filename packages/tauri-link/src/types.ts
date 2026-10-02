@@ -58,10 +58,6 @@ export interface TauriErrorPayload {
 // Stream Types
 // ============================================================================
 
-export interface StreamResponse {
-  stream_id: string;
-}
-
 export type StreamEvent<T> =
   | { type: "value"; value: T }
   | { type: "done" }

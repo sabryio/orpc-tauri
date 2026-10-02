@@ -16,9 +16,17 @@ pub struct PlanetStore {
 
 impl PlanetStore {
     pub fn new() -> Self {
+        let mut planets = Vec::new();
+        for i in 1..=15 {
+            planets.push(Planet {
+                id: i,
+                name: format!("Planet {}", i),
+                description: Some(format!("Initial planet number {}", i)),
+            });
+        }
         Self {
-            planets: Mutex::new(Vec::new()),
-            next_id: Mutex::new(1),
+            planets: Mutex::new(planets),
+            next_id: Mutex::new(16),
         }
     }
 }
