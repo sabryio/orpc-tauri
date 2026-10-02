@@ -3,7 +3,12 @@ import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
 import { handleSseEvent } from "./event-handler";
 import type { SseEvent } from "./sse-types";
-import type { StreamResponse, TauriErrorPayload, Logger } from "../types";
+import type {
+  StreamResponse,
+  TauriErrorPayload,
+  Logger,
+  TauriParamConfig,
+} from "../types";
 import type { ITauriInvoker, ITauriListener } from "../adapters/tauri-adapter";
 import type { EventNameStrategy } from "./event-name-strategy";
 
@@ -18,16 +23,12 @@ export class EventStreamHandler {
   async *createStream<T>(
     commandName: string,
     input?: unknown,
-    customStreamId?: string,
+    paramConfig?: TauriParamConfig,
   ): AsyncIterableIterator<T> {
     const iterator = new StreamIterator<T>();
 
     try {
-      const streamId = await this.startStream(
-        commandName,
-        input,
-        customStreamId,
-      );
+      const streamId = await this.startStream(commandName, input, paramConfig);
       await this.setupListeners(streamId, iterator);
       yield* this.consumeStream(iterator);
     } finally {
@@ -38,16 +39,23 @@ export class EventStreamHandler {
   private async startStream(
     commandName: string,
     input?: unknown,
-    customStreamId?: string,
+    paramConfig?: TauriParamConfig,
   ): Promise<string> {
-    // Use custom streamId from metadata, or fallback to commandName
-    const streamId = customStreamId || commandName;
+    // Determine stream ID and parameter name
+    const streamId =
+      paramConfig?.kind === "stream" && paramConfig.value
+        ? paramConfig.value
+        : commandName;
 
-    // Pass streamId to backend
+    const paramName =
+      paramConfig?.kind === "stream" ? paramConfig.name : "streamId";
+
+    // Build args with the custom parameter name
+    const streamParam = { [paramName]: streamId };
     const args =
-      input === undefined ? { streamId } : { ...input, streamId };
+      input === undefined ? streamParam : { ...input, ...streamParam };
 
-    // Invoke command with streamId parameter
+    // Invoke command with stream parameter
     await this.invoker.invoke(commandName, args);
 
     return streamId;

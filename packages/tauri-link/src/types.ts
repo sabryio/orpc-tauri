@@ -7,10 +7,14 @@ export type Contract = Record<string, unknown>;
 // Metadata Types
 // ============================================================================
 
+export type TauriParamConfig =
+  | { kind: "stream"; name: string; value?: string }
+  | { kind: "channel"; name: string };
+
 export interface TauriMeta {
   command: string;
   transport?: "emit-listen" | "channel";
-  streamId?: string;
+  param?: TauriParamConfig;
   timeout?: number;
   debug?: boolean;
   tags?: string[];

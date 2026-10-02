@@ -5,6 +5,7 @@ export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 export type { Logger } from "./logger";
 export type {
   TauriMeta,
+  TauriParamConfig,
   TauriLinkOptions,
   MetaPlugin,
   Contract,

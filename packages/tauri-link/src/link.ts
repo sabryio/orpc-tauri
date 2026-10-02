@@ -69,19 +69,20 @@ export class TauriLink<TContext = unknown> {
     try {
       if (this.resolver.isStreaming(path)) {
         const transport = this.resolver.getTransport(path);
-        const customStreamId = this.resolver.getStreamId(path);
+        const paramConfig = this.resolver.getParam(path);
 
         if (transport === "channel") {
           return this.channelStream.createStream<TOutput>(
             commandName,
             input,
+            paramConfig,
           ) as TOutput;
         }
 
         return this.eventStream.createStream<TOutput>(
           commandName,
           input,
-          customStreamId,
+          paramConfig,
         ) as TOutput;
       }
 

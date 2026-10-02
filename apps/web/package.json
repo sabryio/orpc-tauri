@@ -27,6 +27,7 @@
     "@tauri-orpc-contract/tauri-link": "workspace:*",
     "@tauri-orpc-contract/ui": "workspace:*",
     "@varlock/vite-integration": "1.5.1",
+    "change-case": "^5.4.4",
     "lucide-react": "catalog:",
     "next-themes": "catalog:",
     "react": "catalog:",
