@@ -2,6 +2,7 @@ import { z } from "zod";
 import { oc } from "@orpc/contract";
 import { openapi } from "@orpc/openapi";
 import { asyncIteratorObject } from "@orpc/contract";
+import { tauri } from "@tauri-orpc-contract/tauri-link";
 
 export const PlanetSchema = z.object({
   id: z.number().int(),
@@ -123,10 +124,12 @@ export const contract = {
   stream: {
     streamEvents: oc
       .meta(openapi({ method: "GET", path: "/stream_events" }))
+      .meta(tauri({ transport: "emit-listen" }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
       .meta(openapi({ method: "GET", path: "/stream_events_channel" }))
+      .meta(tauri({ transport: "channel" }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },

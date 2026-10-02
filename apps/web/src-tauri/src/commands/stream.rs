@@ -27,6 +27,9 @@ pub async fn stream_events(app: AppHandle) -> StreamStartResponse {
 
     // Spawn async task to emit events
     tauri::async_runtime::spawn(async move {
+        // Small delay to ensure frontend sets up listeners
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         // Simulate streaming with delay
         for i in 1..=5 {
             let event = StreamEvent {

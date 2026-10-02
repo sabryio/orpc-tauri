@@ -7,8 +7,8 @@ import {
 } from "@orpc/client";
 import { type RouterContractClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
+import { TauriLink } from "@tauri-orpc-contract/tauri-link";
 import { contract } from "./contract";
-import { TauriLink } from "./tauri-link";
 export { consumeAsyncIterator, getEventMeta } from "@orpc/client";
 
 const link = new TauriLink(contract);

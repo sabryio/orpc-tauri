@@ -18,6 +18,9 @@ pub async fn stream_events_channel(on_event: Channel<StreamChannelEvent>) {
 
     // Spawn async task to send events through the channel
     tauri::async_runtime::spawn(async move {
+        // Small delay to ensure channel is ready
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         // Simulate streaming with delay
         for i in 1..=5 {
             let event = StreamChannelEvent::Data {
