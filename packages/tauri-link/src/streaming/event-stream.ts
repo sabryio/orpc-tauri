@@ -5,6 +5,11 @@ import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
 import type { StreamResponse, TauriErrorPayload } from "../types";
 
+type StreamEventMessage<T> =
+  | { type: "flush" }
+  | { type: "data"; data: T }
+  | { type: "close" };
+
 export class EventStreamHandler {
   async *createStream<T>(
     commandName: string,
@@ -55,9 +60,25 @@ export class EventStreamHandler {
     const doneEvent = `stream:${streamId}:done`;
     const errorEvent = `stream:${streamId}:error`;
 
-    const unlistenData = await listen<T>(dataEvent, (event) => {
-      iterator.push({ type: "value", value: event.payload });
-    });
+    const unlistenData = await listen<StreamEventMessage<T>>(
+      dataEvent,
+      (event) => {
+        const message = event.payload;
+
+        if (message.type === "flush") {
+          // Flush event - connection established, ignore
+          console.log(`[EventStream] Stream ${streamId} connected`);
+        } else if (message.type === "data") {
+          // Data event - push to iterator
+          iterator.push({ type: "value", value: message.data });
+        } else if (message.type === "close") {
+          // Close event - mark stream as finished
+          console.log(`[EventStream] Stream ${streamId} closed`);
+          iterator.markFinished();
+          iterator.push({ type: "done" });
+        }
+      },
+    );
     iterator.addUnlisten(unlistenData);
 
     const unlistenDone = await listen(doneEvent, () => {

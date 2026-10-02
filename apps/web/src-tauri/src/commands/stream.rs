@@ -8,6 +8,20 @@ pub struct StreamEvent {
     pub count: i32,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", content = "data")]
+pub enum StreamEventMessage {
+    /// Initial flush event to establish stream
+    #[serde(rename = "flush")]
+    Flush,
+    /// Data event with payload
+    #[serde(rename = "data")]
+    Data(StreamEvent),
+    /// Close event to signal completion
+    #[serde(rename = "close")]
+    Close,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StreamStartResponse {
     pub stream_id: String,
@@ -27,23 +41,32 @@ pub async fn stream_events(app: AppHandle) -> StreamStartResponse {
 
     // Spawn async task to emit events
     tauri::async_runtime::spawn(async move {
-        // Small delay to ensure frontend sets up listeners
+        let data_event = format!("stream:{}:data", stream_id_clone);
+        let done_event = format!("stream:{}:done", stream_id_clone);
+        let error_event = format!("stream:{}:error", stream_id_clone);
+
+        // 1. FLUSH: Send initial event to establish connection
+        log::info!("Sending flush event for stream: {}", stream_id_clone);
+        if let Err(e) = app.emit(&data_event, StreamEventMessage::Flush) {
+            log::error!("Failed to emit flush event: {:?}", e);
+            let _ = app.emit(&error_event, "Failed to establish stream");
+            return;
+        }
+
+        // Small delay to ensure frontend is ready
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        // Simulate streaming with delay
+        // 2. EVENTS: Stream actual data events
         for i in 1..=5 {
             let event = StreamEvent {
                 message: format!("Event {}", i),
                 count: i,
             };
 
-            log::info!("Emitting event: {:?}", event);
+            log::info!("Emitting event {}: {:?}", i, event);
 
-            // Emit event to frontend with stream-specific event name
-            let data_event = format!("stream:{}:data", stream_id_clone);
-            if let Err(e) = app.emit(&data_event, &event) {
-                log::error!("Failed to emit event: {:?}", e);
-                let error_event = format!("stream:{}:error", stream_id_clone);
+            if let Err(e) = app.emit(&data_event, StreamEventMessage::Data(event)) {
+                log::error!("Failed to emit event {}: {:?}", i, e);
                 let _ = app.emit(&error_event, "Failed to emit event");
                 return;
             }
@@ -52,8 +75,13 @@ pub async fn stream_events(app: AppHandle) -> StreamStartResponse {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
-        // Signal completion
-        let done_event = format!("stream:{}:done", stream_id_clone);
+        // 3. CLOSE: Signal stream completion
+        log::info!("Sending close event for stream: {}", stream_id_clone);
+        if let Err(e) = app.emit(&data_event, StreamEventMessage::Close) {
+            log::error!("Failed to emit close event: {:?}", e);
+        }
+
+        // Send done event for cleanup
         if let Err(e) = app.emit(&done_event, ()) {
             log::error!("Failed to emit done event: {:?}", e);
         }

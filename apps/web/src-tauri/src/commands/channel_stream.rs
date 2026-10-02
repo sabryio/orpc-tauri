@@ -2,12 +2,24 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StreamChannelData {
+    pub message: String,
+    pub count: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "event", content = "data")]
 pub enum StreamChannelEvent {
+    /// Initial flush event to establish stream
+    #[serde(rename = "flush")]
+    Flush,
+    /// Data event with payload
     #[serde(rename = "data")]
-    Data { message: String, count: i32 },
-    #[serde(rename = "done")]
-    Done,
+    Data(StreamChannelData),
+    /// Close event to signal completion
+    #[serde(rename = "close")]
+    Close,
+    /// Error event
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -18,20 +30,30 @@ pub async fn stream_events_channel(on_event: Channel<StreamChannelEvent>) {
 
     // Spawn async task to send events through the channel
     tauri::async_runtime::spawn(async move {
-        // Small delay to ensure channel is ready
+        // 1. FLUSH: Send initial event to establish connection
+        log::info!("Sending flush event to channel");
+        if let Err(e) = on_event.send(StreamChannelEvent::Flush) {
+            log::error!("Failed to send flush event: {:?}", e);
+            let _ = on_event.send(StreamChannelEvent::Error {
+                message: "Failed to establish stream".to_string(),
+            });
+            return;
+        }
+
+        // Small delay to ensure channel is fully ready
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        // Simulate streaming with delay
+        // 2. EVENTS: Stream actual data events
         for i in 1..=5 {
-            let event = StreamChannelEvent::Data {
+            let data = StreamChannelData {
                 message: format!("Channel Event {}", i),
                 count: i,
             };
 
-            log::info!("Sending channel event: {:?}", event);
+            log::info!("Sending channel event {}: {:?}", i, data);
 
-            if let Err(e) = on_event.send(event) {
-                log::error!("Failed to send channel event: {:?}", e);
+            if let Err(e) = on_event.send(StreamChannelEvent::Data(data)) {
+                log::error!("Failed to send channel event {}: {:?}", i, e);
                 let _ = on_event.send(StreamChannelEvent::Error {
                     message: "Failed to send event".to_string(),
                 });
@@ -42,9 +64,10 @@ pub async fn stream_events_channel(on_event: Channel<StreamChannelEvent>) {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
-        // Signal completion
-        if let Err(e) = on_event.send(StreamChannelEvent::Done) {
-            log::error!("Failed to send done event: {:?}", e);
+        // 3. CLOSE: Signal completion
+        log::info!("Sending close event to channel");
+        if let Err(e) = on_event.send(StreamChannelEvent::Close) {
+            log::error!("Failed to send close event: {:?}", e);
         }
 
         log::info!("Stream events channel completed");
