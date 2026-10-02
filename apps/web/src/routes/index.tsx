@@ -71,14 +71,6 @@ function HomeComponent() {
       enabled: false,
       gcTime: 0, // Immediately cleanup when query becomes inactive
       structuralSharing: false, // Prevent React Query from cloning data and losing Symbol
-      select: (data) => {
-        // Preserve Symbol metadata by attaching it as a regular property
-        const meta = getEventMeta(data);
-        if (meta) {
-          (data as any)._meta = meta;
-        }
-        return data;
-      },
     }),
   );
 
