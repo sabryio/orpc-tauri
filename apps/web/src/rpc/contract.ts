@@ -2,7 +2,7 @@ import { z } from "zod";
 import { oc } from "@orpc/contract";
 import { asyncIteratorObject } from "@orpc/contract";
 import { tauri } from "@tauri-orpc-contract/tauri-link";
-import { camelCase, snakeCase } from "change-case";
+import { camelCase } from "change-case";
 
 export const PlanetSchema = z.object({
   id: z.number().int(),
@@ -99,9 +99,8 @@ export const contract = {
   stream: {
     streamEvents: oc
       .meta(tauri.command("stream_events"))
-      .meta(tauri.transport("emit-listen"))
       .meta(
-        tauri.param({
+        tauri.transport({
           kind: "stream",
           name: camelCase("stream_id"),
           value: crypto.randomUUID(),
@@ -118,8 +117,7 @@ export const contract = {
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
       .meta(tauri.command("stream_events_channel"))
-      .meta(tauri.transport("channel"))
-      .meta(tauri.param({ kind: "channel", name: camelCase("on_event") }))
+      .meta(tauri.transport({ kind: "channel", name: camelCase("on_event") }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },

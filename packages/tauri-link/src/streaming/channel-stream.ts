@@ -2,7 +2,7 @@ import { StreamIterator } from "./stream-iterator";
 import { ErrorHandler } from "../errors/error-handler";
 import { handleSseEvent } from "./event-handler";
 import type { SseEvent } from "./sse-types";
-import type { Logger, TauriParamConfig } from "../types";
+import type { Logger, TauriTransportConfig } from "../types";
 import type {
   ITauriInvoker,
   ITauriChannelFactory,
@@ -18,7 +18,7 @@ export class ChannelStreamHandler {
   async *createStream<T>(
     commandName: string,
     input?: unknown,
-    paramConfig?: TauriParamConfig,
+    transportConfig?: TauriTransportConfig,
   ): AsyncIterableIterator<T> {
     const iterator = new StreamIterator<T>();
     const channel = this.channelFactory.createChannel<SseEvent<T>>();
@@ -30,7 +30,7 @@ export class ChannelStreamHandler {
     try {
       // Determine channel parameter name
       const paramName =
-        paramConfig?.kind === "channel" ? paramConfig.name : "onEvent";
+        transportConfig?.kind === "channel" ? transportConfig.name : "onEvent";
 
       // Build args with custom parameter name
       const channelParam = { [paramName]: channel };

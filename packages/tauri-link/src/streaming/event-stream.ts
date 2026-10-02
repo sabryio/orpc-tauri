@@ -5,7 +5,7 @@ import type { SseEvent } from "./sse-types";
 import type {
   TauriErrorPayload,
   Logger,
-  TauriParamConfig,
+  TauriTransportConfig,
   EventNamesConfig,
 } from "../types";
 import type { ITauriInvoker, ITauriListener } from "../adapters/tauri-adapter";
@@ -22,7 +22,7 @@ export class EventStreamHandler {
   async *createStream<T>(
     commandName: string,
     input?: unknown,
-    paramConfig?: TauriParamConfig,
+    transportConfig?: TauriTransportConfig,
     eventsConfig?: EventNamesConfig,
   ): AsyncIterableIterator<T> {
     const iterator = new StreamIterator<T>();
@@ -31,7 +31,7 @@ export class EventStreamHandler {
       const streamId = await this.startStream(
         commandName,
         input,
-        paramConfig,
+        transportConfig,
         eventsConfig,
       );
       await this.setupListeners(streamId, iterator, eventsConfig);
@@ -44,17 +44,17 @@ export class EventStreamHandler {
   private async startStream(
     commandName: string,
     input?: unknown,
-    paramConfig?: TauriParamConfig,
+    transportConfig?: TauriTransportConfig,
     eventsConfig?: EventNamesConfig,
   ): Promise<string> {
     // Determine stream ID and parameter name
     const streamId =
-      paramConfig?.kind === "stream" && paramConfig.value
-        ? paramConfig.value
+      transportConfig?.kind === "stream" && transportConfig.value
+        ? transportConfig.value
         : commandName;
 
     const paramName =
-      paramConfig?.kind === "stream" ? paramConfig.name : "streamId";
+      transportConfig?.kind === "stream" ? transportConfig.name : "streamId";
 
     // Generate event names using custom config or default strategy
     const eventNames = eventsConfig

@@ -7,7 +7,7 @@ export type Contract = Record<string, unknown>;
 // Metadata Types
 // ============================================================================
 
-export type TauriParamConfig =
+export type TauriTransportConfig =
   | { kind: "stream"; name: string; value?: string }
   | { kind: "channel"; name: string };
 
@@ -22,8 +22,7 @@ export type EventNamesConfig = {
 
 export interface TauriMeta {
   command: string;
-  transport?: "emit-listen" | "channel";
-  param?: TauriParamConfig;
+  transport?: TauriTransportConfig;
   events?: EventNamesConfig;
   timeout?: number;
   debug?: boolean;

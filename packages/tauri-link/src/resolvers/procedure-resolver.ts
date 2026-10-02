@@ -3,7 +3,7 @@ import { extractTauriMeta } from "../metadata";
 import type {
   Contract,
   ORPCMeta,
-  TauriParamConfig,
+  TauriTransportConfig,
   EventNamesConfig,
 } from "../types";
 
@@ -68,7 +68,14 @@ export class ProcedureResolver {
     if (!procedure) return "emit-listen";
 
     const tauriMeta = extractTauriMeta(procedure);
-    return tauriMeta?.transport ?? "emit-listen";
+
+    // Derive transport type from transport.kind
+    if (tauriMeta?.transport) {
+      return tauriMeta.transport.kind === "channel" ? "channel" : "emit-listen";
+    }
+
+    // Default to emit-listen if no transport specified
+    return "emit-listen";
   }
 
   getDebug(path: string[]): boolean {
@@ -79,12 +86,12 @@ export class ProcedureResolver {
     return tauriMeta?.debug ?? false;
   }
 
-  getParam(path: string[]): TauriParamConfig | undefined {
+  getTransportConfig(path: string[]): TauriTransportConfig | undefined {
     const procedure = this.resolve(path);
     if (!procedure) return undefined;
 
     const tauriMeta = extractTauriMeta(procedure);
-    return tauriMeta?.param;
+    return tauriMeta?.transport;
   }
 
   getEvents(path: string[]): EventNamesConfig | undefined {
