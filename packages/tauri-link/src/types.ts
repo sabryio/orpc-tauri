@@ -40,15 +40,9 @@ export interface TauriMeta {
 
 export interface ORPCMeta {
   meta?: {
-    "~openapi"?: OpenAPIMeta;
     "~tauri"?: TauriMeta;
   };
   outputSchemas?: unknown[];
-}
-
-export interface OpenAPIMeta {
-  path?: string;
-  method?: string;
 }
 
 // ============================================================================

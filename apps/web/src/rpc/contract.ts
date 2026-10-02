@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { oc } from "@orpc/contract";
-import { openapi } from "@orpc/openapi";
 import { asyncIteratorObject } from "@orpc/contract";
 import { tauri } from "@tauri-orpc-contract/tauri-link";
 
@@ -14,10 +13,6 @@ export const PlanetSchema = z.object({
 // SSE Event Types
 // ============================================================================
 
-// ============================================================================
-// Enum Types
-// ============================================================================
-
 export const SseEventSchema = z.object({
   message: z.string(),
   count: z.number().int(),
@@ -25,29 +20,8 @@ export const SseEventSchema = z.object({
 
 export type SseEvent = z.infer<typeof SseEventSchema>;
 
-export const StreamChannelEventSchema = z.discriminatedUnion("event", [
-  z.object({
-    event: z.literal("data"),
-    data: z.object({
-      message: z.string(),
-      count: z.number().int(),
-    }),
-  }),
-  z.object({
-    event: z.literal("done"),
-  }),
-  z.object({
-    event: z.literal("error"),
-    data: z.object({
-      message: z.string(),
-    }),
-  }),
-]);
-
-export type StreamChannelEvent = z.infer<typeof StreamChannelEventSchema>;
-
 // ============================================================================
-// Domain Types - Better Auth Rorpc Example Domain Models Ping
+// Domain Types - Ping
 // ============================================================================
 
 export const PingResponseSchema = z.object({
@@ -69,24 +43,24 @@ const StandardApiErrors = {
 } as const;
 
 // ============================================================================
-// API Contract
+// API Contract - Pure Tauri (No OpenAPI)
 // ============================================================================
 
 export const contract = {
   ping: {
     ping: oc
-      .meta(openapi({ method: "GET", path: "/ping" }))
+      .meta(tauri({ command: "ping" }))
       .input(z.void())
       .output(PingResponseSchema),
   },
   planet: {
     deletePlanet: oc
-      .meta(openapi({ method: "DELETE", path: "/delete_planet" }))
+      .meta(tauri({ command: "delete_planet" }))
       .input(z.object({ id: z.number().int() }))
       .output(z.void())
       .errors(StandardApiErrors),
     createPlanet: oc
-      .meta(openapi({ method: "POST", path: "/create_planet" }))
+      .meta(tauri({ command: "create_planet" }))
       .input(
         z.object({
           name: z.string(),
@@ -96,12 +70,12 @@ export const contract = {
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     findPlanet: oc
-      .meta(openapi({ method: "GET", path: "/find_planet" }))
+      .meta(tauri({ command: "find_planet" }))
       .input(z.object({ id: z.number().int(), q: z.string().optional() }))
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     listPlanetsPaginated: oc
-      .meta(openapi({ method: "GET", path: "/list_planets_paginated" }))
+      .meta(tauri({ command: "list_planets_paginated" }))
       .input(
         z.object({
           limit: z.number().int(),
@@ -116,20 +90,18 @@ export const contract = {
       )
       .errors(StandardApiErrors),
     listPlanets: oc
-      .meta(openapi({ method: "GET", path: "/list_planets" }))
+      .meta(tauri({ command: "list_planets" }))
       .input(z.void())
       .output(z.array(PlanetSchema))
       .errors(StandardApiErrors),
   },
   stream: {
     streamEvents: oc
-      .meta(openapi({ method: "GET", path: "/stream_events" }))
-      .meta(tauri({ transport: "emit-listen" }))
+      .meta(tauri({ command: "stream_events", transport: "emit-listen" }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
     streamEventsChannel: oc
-      .meta(openapi({ method: "GET", path: "/stream_events_channel" }))
-      .meta(tauri({ transport: "channel" }))
+      .meta(tauri({ command: "stream_events_channel", transport: "channel" }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },

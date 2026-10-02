@@ -22,28 +22,23 @@ export class ContractValidator {
 
     if (orpcMeta) {
       const tauriMeta = extractTauriMeta(obj as Record<string, unknown>);
-      const openApiPath = orpcMeta.meta?.["~openapi"]?.path;
-
-      // Priority 1: Tauri command name
-      // Priority 2: OpenAPI path
-      const commandName = tauriMeta?.command || openApiPath;
+      const commandName = tauriMeta?.command;
 
       if (commandName) {
-        const normalizedName = this.normalizeCommandName(commandName);
         const procedurePath = path.join(".");
 
-        if (commandMap.has(normalizedName)) {
-          const existingPath = commandMap.get(normalizedName)!.join(".");
+        if (commandMap.has(commandName)) {
+          const existingPath = commandMap.get(commandName)!.join(".");
           throw new Error(
-            `[TauriLink] Duplicate command name detected: "${normalizedName}"\n` +
+            `[TauriLink] Duplicate command name detected: "${commandName}"\n` +
               `  - First defined at: ${existingPath}\n` +
               `  - Duplicate found at: ${procedurePath}\n` +
               `Each Tauri command must have a unique name.`,
           );
         }
 
-        commandMap.set(normalizedName, path);
-        this.commandNames.add(normalizedName);
+        commandMap.set(commandName, path);
+        this.commandNames.add(commandName);
       }
     }
 
@@ -52,9 +47,5 @@ export class ContractValidator {
         this.extractCommands(value, [...path, key], commandMap);
       }
     }
-  }
-
-  private normalizeCommandName(path: string): string {
-    return path.startsWith("/") ? path.substring(1) : path;
   }
 }
