@@ -5,12 +5,14 @@ import { handleSseEvent } from "./event-handler";
 import type { SseEvent } from "./sse-types";
 import type { StreamResponse, TauriErrorPayload, Logger } from "../types";
 import type { ITauriInvoker, ITauriListener } from "../adapters/tauri-adapter";
+import type { EventNameStrategy } from "./event-name-strategy";
 
 export class EventStreamHandler {
   constructor(
     private readonly invoker: ITauriInvoker,
     private readonly listener: ITauriListener,
     private readonly logger: Logger,
+    private readonly eventNameStrategy: EventNameStrategy,
   ) {}
 
   async *createStream<T>(
@@ -32,16 +34,15 @@ export class EventStreamHandler {
     commandName: string,
     input?: unknown,
   ): Promise<string> {
+    // Use commandName directly as stream_id (no UUID generation!)
+    const streamId = commandName;
+
     const args = input === undefined ? {} : { input };
-    const response = await this.invoker.invoke<StreamResponse>(commandName, args);
 
-    if (!response.stream_id) {
-      throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
-        message: `Stream command ${commandName} did not return stream_id`,
-      });
-    }
+    // Invoke command without stream_id parameter
+    await this.invoker.invoke(commandName, args);
 
-    return response.stream_id;
+    return streamId;
   }
 
   private async *consumeStream<T>(
@@ -63,11 +64,7 @@ export class EventStreamHandler {
     streamId: string,
     iterator: StreamIterator<T>,
   ): Promise<void> {
-    const events = {
-      data: `stream:${streamId}:data`,
-      done: `stream:${streamId}:done`,
-      error: `stream:${streamId}:error`,
-    };
+    const events = this.eventNameStrategy.getEventNames(streamId);
 
     const unlistenData = await this.listener.listen<SseEvent<T>>(
       events.data,

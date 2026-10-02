@@ -2,7 +2,6 @@ use crate::sse::Event;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-use uuid::Uuid;
 
 /// Stream event data payload
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -11,22 +10,17 @@ pub struct StreamEventData {
     pub count: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StreamStartResponse {
-    pub stream_id: String,
-}
-
 #[tauri::command]
-pub async fn stream_events(app: AppHandle) -> StreamStartResponse {
-    // Generate unique stream ID in Rust
-    let stream_id = Uuid::new_v4().to_string();
+pub async fn stream_events(app: AppHandle) {
+    // Use command name directly as stream_id (no UUID generation!)
+    let stream_id = "stream_events";
 
     log::info!(
         "Stream events command invoked with stream_id: {}",
         stream_id
     );
 
-    let stream_id_clone = stream_id.clone();
+    let stream_id_clone = stream_id.to_string();
 
     // Spawn async task to emit events
     tauri::async_runtime::spawn(async move {
@@ -86,7 +80,4 @@ pub async fn stream_events(app: AppHandle) -> StreamStartResponse {
 
         log::info!("Stream events completed");
     });
-
-    // Return stream ID immediately so frontend can start listening
-    StreamStartResponse { stream_id }
 }

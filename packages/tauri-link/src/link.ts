@@ -5,6 +5,7 @@ import { EventStreamHandler } from "./streaming/event-stream";
 import { ChannelStreamHandler } from "./streaming/channel-stream";
 import { ErrorHandler } from "./errors/error-handler";
 import { ConsoleLogger } from "./logger";
+import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 import {
   TauriAdapter,
   TauriChannelFactory,
@@ -25,12 +26,15 @@ export class TauriLink<TContext = unknown> {
 
     const listener = new TauriAdapter();
     const channelFactory = new TauriChannelFactory();
+    const eventNameStrategy =
+      options?.eventNameStrategy ?? new DefaultEventNameStrategy();
 
     this.resolver = new ProcedureResolver(contract);
     this.eventStream = new EventStreamHandler(
       this.invoker,
       listener,
       this.logger,
+      eventNameStrategy,
     );
     this.channelStream = new ChannelStreamHandler(
       this.invoker,

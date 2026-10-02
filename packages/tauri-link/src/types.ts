@@ -63,4 +63,5 @@ export interface CallOptions<TContext> {
 
 export interface TauriLinkOptions {
   logger?: import("./logger").Logger;
+  eventNameStrategy?: import("./streaming/event-name-strategy").EventNameStrategy;
 }
