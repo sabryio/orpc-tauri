@@ -14,8 +14,53 @@ import { Database, Plus, Globe, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { NumberInput } from "@/components/number-input";
+import { CodeBlock } from "@/components/code-block";
 import { orpc, isDefinedError } from "@/rpc";
 import { mutationHandlers } from "@/hooks/use-mutation-handlers";
+
+const ORPC_MUTATION_CODE = `// useMutation with oRPC
+const createPlanetMutation = useMutation(
+  orpc.planet.createPlanet.mutationOptions({
+    onSuccess: () => {
+      toast.success("Planet created");
+      queryClient.invalidateQueries({
+        queryKey: orpc.planet.key()
+      });
+    },
+  }),
+);
+
+// Trigger mutation
+createPlanetMutation.mutate({
+  name: "Mars",
+  description: "The red planet"
+});`;
+
+const ORPC_QUERY_CODE = `// useInfiniteQuery for pagination
+const planetsQuery = useInfiniteQuery(
+  orpc.planet.listPlanetsPaginated.infiniteOptions({
+    input: (pageParam) => ({
+      limit: 10,
+      offset: pageParam ?? 0,
+    }),
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.next_page_param,
+  }),
+);`;
+
+const ORPC_ERROR_CODE = `// Error handling with oRPC
+const findPlanetMutation = useMutation(
+  orpc.planet.findPlanet.mutationOptions({
+    onError: (error) => {
+      toast.error(
+        isDefinedError(error)
+          ? \`Contract Error [\${error.code}]: \${error.message}\`
+          : \`Unexpected Error: \${error.message}\`,
+      );
+    },
+  }),
+);`;
 
 interface Planet {
   id: number;
@@ -74,8 +119,15 @@ export function DataLayerTab() {
     planetsQuery.data?.pages.flatMap((p) => p.items) || [];
 
   return (
-    <Tabs defaultValue="planets" className="h-full flex flex-col">
-      <TabsList className="mb-4 bg-card border border-primary/30">
+    <div className="flex flex-col h-full">
+      <div className="grid grid-cols-3 gap-3 mb-4 flex-none">
+        <CodeBlock title="oRPC Mutations" code={ORPC_MUTATION_CODE} />
+        <CodeBlock title="oRPC Pagination" code={ORPC_QUERY_CODE} />
+        <CodeBlock title="oRPC Error Handling" code={ORPC_ERROR_CODE} />
+      </div>
+
+      <Tabs defaultValue="planets" className="flex flex-col flex-1 min-h-0">
+      <TabsList className="mb-4 bg-card border border-primary/30 flex-none">
         <TabsTrigger
           value="planets"
           className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
@@ -265,5 +317,6 @@ export function DataLayerTab() {
         </ScrollArea>
       </TabsContent>
     </Tabs>
+    </div>
   );
 }

@@ -3,7 +3,27 @@ import { Button } from "@tauri-orpc-contract/ui/components/button";
 import { Card } from "@tauri-orpc-contract/ui/components/card";
 import { Activity, Database, BarChart3, Radio, Zap } from "lucide-react";
 import { orpc } from "@/rpc";
+import { CodeBlock } from "@/components/code-block";
 import type { UseQueryResult } from "@tanstack/react-query";
+
+const ORPC_CODE = `// useInfiniteQuery with oRPC
+const planetsQuery = useInfiniteQuery(
+  orpc.planet.listPlanetsPaginated.infiniteOptions({
+    input: (pageParam: number | undefined) => ({
+      limit: 10,
+      offset: pageParam ?? 0,
+    }),
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) => lastPage.next_page_param,
+  }),
+);
+
+// Access data
+const totalPlanets = planetsQuery.data?.pages
+  .flatMap(p => p.items).length ?? 0;
+
+// Load more
+planetsQuery.fetchNextPage();`;
 
 interface OverviewTabProps {
   pingQuery: UseQueryResult<{ id: string; message: string }>;
@@ -25,7 +45,12 @@ export function OverviewTab({ pingQuery, onTabChange }: OverviewTabProps) {
   const pagesLoaded = planetsQuery.data?.pages.length ?? 0;
 
   return (
-    <div className="grid grid-cols-2 gap-4 h-full">
+    <div className="flex flex-col h-full">
+      <div className="mb-4 flex-none">
+        <CodeBlock title="oRPC Infinite Query Pattern" code={ORPC_CODE} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
       <Card className="p-6 border-primary/30 bg-card glow">
         <div className="flex items-center gap-3 mb-4">
           <Activity className="h-5 w-5 text-primary" />
@@ -45,10 +70,10 @@ export function OverviewTab({ pingQuery, onTabChange }: OverviewTabProps) {
         )}
       </Card>
 
-      <Card className="p-6 border-accent/30 bg-card glow-accent">
+      <Card className="p-6 border-primary/30 bg-card glow">
         <div className="flex items-center gap-3 mb-4">
-          <Database className="h-5 w-5 text-accent" />
-          <h3 className="text-sm font-semibold text-accent">Data Statistics</h3>
+          <Database className="h-5 w-5 text-primary" />
+          <h3 className="text-sm font-semibold text-primary">Data Statistics</h3>
         </div>
         <div className="space-y-2 font-mono text-sm">
           <div className="flex justify-between">
@@ -57,7 +82,7 @@ export function OverviewTab({ pingQuery, onTabChange }: OverviewTabProps) {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Pages Loaded:</span>
-            <span className="text-accent">{pagesLoaded}</span>
+            <span className="text-primary">{pagesLoaded}</span>
           </div>
         </div>
       </Card>
@@ -83,6 +108,7 @@ export function OverviewTab({ pingQuery, onTabChange }: OverviewTabProps) {
           </Button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

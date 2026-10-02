@@ -6,8 +6,50 @@ import { Play, X } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { EventCard } from "./event-card";
+import { CodeBlock } from "@/components/code-block";
 import { useStreamEvents } from "@/hooks/use-stream-events";
 import { client, getEventMeta, consumeAsyncIterator } from "@/rpc";
+
+const STREAM_HOOK_CODE = `// Custom hook pattern
+const stream = useStreamEvents<EventType>();
+
+stream.startStream(
+  () => client.stream.streamEvents(undefined, {
+    signal: new AbortController().signal,
+  }),
+  "Stream completed!",
+);
+
+// Access events
+stream.events.map(event => ...)
+stream.isStreaming // boolean`;
+
+const ASYNC_ITERATOR_CODE = `// Direct async iterator consumption
+const cancel = consumeAsyncIterator(
+  client.stream.streamEvents(),
+  {
+    onEvent: (event) => {
+      const meta = getEventMeta(event);
+      setEvents(prev => [...prev, event]);
+    },
+    onError: (err) => toast.error("Failed"),
+    onSuccess: () => toast.success("Done"),
+    onFinish: () => setCancelled(true),
+  }
+);
+
+// Cancel anytime
+cancel();`;
+
+const CHANNEL_CODE = `// Tauri Channel transport (no race condition)
+const channelStream = useStreamEvents();
+
+channelStream.startStream(
+  () => client.stream.streamEventsChannel(undefined, {
+    signal: new AbortController().signal,
+  }),
+  "Channel completed!",
+);`;
 
 interface StreamEvent {
   message: string;
@@ -80,8 +122,15 @@ export function StreamingTab() {
   const channelEvents = channelStream.events;
   const isChannelStreaming = channelStream.isStreaming;
   return (
-    <Tabs defaultValue="emit-listen" className="h-full flex flex-col">
-      <TabsList className="mb-4 bg-card border border-primary/30">
+    <div className="flex flex-col h-full">
+      <div className="grid grid-cols-3 gap-3 mb-4 flex-none">
+        <CodeBlock title="Stream Hook Pattern" code={STREAM_HOOK_CODE} />
+        <CodeBlock title="Async Iterator" code={ASYNC_ITERATOR_CODE} />
+        <CodeBlock title="Channel Transport" code={CHANNEL_CODE} />
+      </div>
+
+      <Tabs defaultValue="emit-listen" className="flex flex-col flex-1 min-h-0">
+        <TabsList className="mb-4 bg-card border border-primary/30 flex-none">
         <TabsTrigger value="emit-listen" className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
           Emit-Listen
         </TabsTrigger>
@@ -176,5 +225,6 @@ export function StreamingTab() {
         </Card>
       </TabsContent>
     </Tabs>
+    </div>
   );
 }
