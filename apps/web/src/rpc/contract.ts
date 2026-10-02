@@ -24,6 +24,27 @@ export const SseEventSchema = z.object({
 
 export type SseEvent = z.infer<typeof SseEventSchema>;
 
+export const StreamChannelEventSchema = z.discriminatedUnion("event", [
+  z.object({
+    event: z.literal("data"),
+    data: z.object({
+      message: z.string(),
+      count: z.number().int(),
+    }),
+  }),
+  z.object({
+    event: z.literal("done"),
+  }),
+  z.object({
+    event: z.literal("error"),
+    data: z.object({
+      message: z.string(),
+    }),
+  }),
+]);
+
+export type StreamChannelEvent = z.infer<typeof StreamChannelEventSchema>;
+
 // ============================================================================
 // Domain Types - Better Auth Rorpc Example Domain Models Ping
 // ============================================================================
@@ -102,6 +123,10 @@ export const contract = {
   stream: {
     streamEvents: oc
       .meta(openapi({ method: "GET", path: "/stream_events" }))
+      .input(z.void())
+      .output(asyncIteratorObject(SseEventSchema)),
+    streamEventsChannel: oc
+      .meta(openapi({ method: "GET", path: "/stream_events_channel" }))
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },

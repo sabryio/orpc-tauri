@@ -21,7 +21,11 @@ function HomeComponent() {
   const [streamEvents, setStreamEvents] = useState<
     Array<{ message: string; count: number }>
   >([]);
+  const [channelStreamEvents, setChannelStreamEvents] = useState<
+    Array<{ message: string; count: number }>
+  >([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isChannelStreaming, setIsChannelStreaming] = useState(false);
 
   const pingQuery = useQuery(orpc.ping.ping.queryOptions());
 
@@ -107,6 +111,34 @@ function HomeComponent() {
       }
     } finally {
       setIsStreaming(false);
+    }
+  };
+
+  const handleChannelStreamEvents = async () => {
+    setIsChannelStreaming(true);
+    setChannelStreamEvents([]);
+    const controller = new AbortController();
+
+    try {
+      const iterator = await client.stream.streamEventsChannel(undefined, {
+        signal: controller.signal,
+      });
+
+      for await (const event of iterator) {
+        console.log("Received channel stream event:", event);
+        setChannelStreamEvents((prev) => [...prev, event]);
+      }
+
+      toast.success("Channel stream completed!");
+    } catch (error) {
+      console.error("Channel stream error:", error);
+      if (isDefinedError(error)) {
+        toast.error(`Channel stream error: ${error}`);
+      } else {
+        toast.error("Channel stream failed");
+      }
+    } finally {
+      setIsChannelStreaming(false);
     }
   };
 
@@ -272,6 +304,35 @@ function HomeComponent() {
               <div className="space-y-2">
                 <p className="font-semibold">Received Events:</p>
                 {streamEvents.map((event, index) => (
+                  <div key={index} className="p-3 bg-muted rounded-md">
+                    <p className="text-sm">
+                      <strong>Message:</strong> {event.message}
+                    </p>
+                    <p className="text-sm">
+                      <strong>Count:</strong> {event.count}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">
+            Channel Stream Test (Tauri Native)
+          </h2>
+          <div className="space-y-4">
+            <Button
+              onClick={handleChannelStreamEvents}
+              disabled={isChannelStreaming}
+            >
+              {isChannelStreaming ? "Streaming..." : "Start Channel Stream"}
+            </Button>
+            {channelStreamEvents.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold">Received Channel Events:</p>
+                {channelStreamEvents.map((event, index) => (
                   <div key={index} className="p-3 bg-muted rounded-md">
                     <p className="text-sm">
                       <strong>Message:</strong> {event.message}

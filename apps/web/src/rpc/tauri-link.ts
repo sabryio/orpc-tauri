@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/client";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, Channel } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 // ============================================================================
@@ -100,7 +100,10 @@ class ErrorHandler {
     );
   }
 
-  static toORPCError(error: unknown, context: string): ORPCError<string, unknown> {
+  static toORPCError(
+    error: unknown,
+    context: string,
+  ): ORPCError<string, unknown> {
     if (this.isTauriORPCError(error)) {
       const orpcError = new ORPCError<string, unknown>(
         error.code || "INTERNAL_ERROR",
@@ -230,9 +233,12 @@ class ProcedureResolver {
       });
     }
 
-    return commandPath.startsWith("/")
-      ? commandPath.substring(1)
-      : commandPath;
+    return commandPath.startsWith("/") ? commandPath.substring(1) : commandPath;
+  }
+
+  isChannelBased(path: string[]): boolean {
+    const commandName = this.extractCommandName(path);
+    return commandName.includes("channel");
   }
 
   isStreaming(path: string[]): boolean {
@@ -285,7 +291,16 @@ export class TauriLink<TContext = unknown> {
 
     try {
       if (this.resolver.isStreaming(path)) {
-        return this.createStreamIterator<TOutput>(commandName, input) as TOutput;
+        if (this.resolver.isChannelBased(path)) {
+          return this.createChannelStreamIterator<TOutput>(
+            commandName,
+            input,
+          ) as TOutput;
+        }
+        return this.createStreamIterator<TOutput>(
+          commandName,
+          input,
+        ) as TOutput;
       }
 
       return await this.invokeCommand<TInput, TOutput>(commandName, input);
@@ -363,11 +378,73 @@ export class TauriLink<TContext = unknown> {
     });
     iterator.addUnlisten(unlistenDone);
 
-    const unlistenError = await listen<TauriErrorPayload>(errorEvent, (event) => {
-      iterator.markFinished();
-      const error = ErrorHandler.toORPCError(event.payload, "Stream error");
-      iterator.push({ type: "error", error });
-    });
+    const unlistenError = await listen<TauriErrorPayload>(
+      errorEvent,
+      (event) => {
+        iterator.markFinished();
+        const error = ErrorHandler.toORPCError(event.payload, "Stream error");
+        iterator.push({ type: "error", error });
+      },
+    );
     iterator.addUnlisten(unlistenError);
+  }
+
+  private async *createChannelStreamIterator<T>(
+    commandName: string,
+    input?: unknown,
+  ): AsyncIterableIterator<T> {
+    const iterator = new StreamIterator<T>();
+
+    type ChannelEvent =
+      | { event: "data"; data: T }
+      | { event: "done" }
+      | { event: "error"; data: { message: string } };
+
+    const channel = new Channel<ChannelEvent>();
+
+    channel.onmessage = (message) => {
+      if (message.event === "data") {
+        iterator.push({ type: "value", value: message.data });
+      } else if (message.event === "done") {
+        iterator.markFinished();
+        iterator.push({ type: "done" });
+      } else if (message.event === "error") {
+        iterator.markFinished();
+        const error = new ORPCError<"INTERNAL_ERROR", unknown>(
+          "INTERNAL_ERROR",
+          { message: message.data.message },
+        );
+        iterator.push({ type: "error", error });
+      }
+    };
+
+    try {
+      const args =
+        input === undefined
+          ? { onEvent: channel }
+          : { input, onEvent: channel };
+
+      // Invoke command with channel (no await on response, it's fire-and-forget)
+      invoke(commandName, args).catch((error) => {
+        iterator.markFinished();
+        iterator.push({
+          type: "error",
+          error: ErrorHandler.toORPCError(error, "Channel stream failed"),
+        });
+      });
+
+      while (true) {
+        const item = await iterator.dequeue();
+        if (item.type === "value") {
+          yield item.value;
+        } else if (item.type === "error") {
+          throw item.error;
+        } else {
+          break;
+        }
+      }
+    } finally {
+      iterator.cleanup();
+    }
   }
 }
