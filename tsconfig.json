@@ -1,0 +1,3 @@
+{
+  "extends": "@tauri-orpc-contract/config/tsconfig.base.json"
+}

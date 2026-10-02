@@ -1,0 +1,24 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-lyra",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@tauri-orpc-contract/ui/components",
+    "utils": "@tauri-orpc-contract/ui/lib/utils",
+    "hooks": "@tauri-orpc-contract/ui/hooks",
+    "lib": "@tauri-orpc-contract/ui/lib",
+    "ui": "@tauri-orpc-contract/ui/components"
+  },
+  "menuColor": "default",
+  "menuAccent": "subtle",
+  "registries": {}
+}
