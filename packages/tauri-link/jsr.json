@@ -5,5 +5,15 @@
     ".": "./dist/index.js",
     "./link": "./dist/link.export.js",
     "./meta": "./dist/meta.export.js"
+  },
+  "publish": {
+    "include": [
+      "dist",
+      "README.md",
+      "LICENSE"
+    ],
+    "exclude": [
+      "!dist"
+    ]
   }
 }
