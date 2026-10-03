@@ -11,26 +11,67 @@ const PlanetSchema = z.object({
 });
 
 // ============================================================================
-// SSE Event Types
+// SSE Event Types - Discriminated Union matching Rust AppEvent enum
 // ============================================================================
 
-const SseEventSchema = z.object({
-  message: z.string(),
-  count: z.number().int(),
-});
+// Planet operation types
+const PlanetOperationSchema = z.enum([
+  "created",
+  "updated",
+  "deleted",
+  "listed",
+]);
 
-type SseEvent = z.infer<typeof SseEventSchema>;
+// System status types
+const SystemStatusSchema = z.enum(["healthy", "warning", "error"]);
+
+// Discriminated union for all app events
+const AppEventSchema = z.discriminatedUnion("type", [
+  // Stream events
+  z.object({
+    type: z.literal("stream"),
+    data: z.object({
+      message: z.string(),
+      count: z.number().int(),
+    }),
+  }),
+
+  // Planet CRUD events
+  z.object({
+    type: z.literal("planet"),
+    data: z.object({
+      operation: PlanetOperationSchema,
+      planet_id: z.number().int().optional(),
+      planet_name: z.string().optional(),
+      timestamp: z.number().int(),
+    }),
+  }),
+
+  // System/health events
+  z.object({
+    type: z.literal("system"),
+    data: z.object({
+      status: SystemStatusSchema,
+      message: z.string(),
+    }),
+  }),
+]);
+
+export type AppEvent = z.infer<typeof AppEventSchema>;
+
+// Helper type extractors for type-safe event handling
+export type StreamEvent = Extract<AppEvent, { type: "stream" }>;
+export type PlanetEvent = Extract<AppEvent, { type: "planet" }>;
+export type SystemEvent = Extract<AppEvent, { type: "system" }>;
 
 // ============================================================================
 // Domain Types - Ping
 // ============================================================================
 
-export const PingResponseSchema = z.object({
+const PingResponseSchema = z.object({
   id: z.uuid(),
   message: z.string(),
 });
-
-export type PingResponse = z.infer<typeof PingResponseSchema>;
 
 // ============================================================================
 // Error Schemas
@@ -57,30 +98,38 @@ export const contract = {
   planet: {
     deletePlanet: oc
       .meta(tauri.command("delete_planet"))
-      .input(z.object({ id: z.number().int() }))
+      .input(z.object({ input: z.object({ id: z.number().int() }) }))
       .output(z.void())
       .errors(StandardApiErrors),
     createPlanet: oc
       .meta(tauri.command("create_planet"))
       .input(
         z.object({
-          name: z.string(),
-          description: z.string().optional(),
+          input: z.object({
+            name: z.string(),
+            description: z.string().optional(),
+          }),
         }),
       )
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     findPlanet: oc
       .meta(tauri.command("find_planet"))
-      .input(z.object({ id: z.number().int(), q: z.string().optional() }))
+      .input(
+        z.object({
+          input: z.object({ id: z.number().int(), q: z.string().optional() }),
+        }),
+      )
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     listPlanetsPaginated: oc
       .meta(tauri.command("list_planets_paginated"))
       .input(
         z.object({
-          limit: z.number().int(),
-          offset: z.number().int().optional(),
+          input: z.object({
+            limit: z.number().int(),
+            offset: z.number().int().optional(),
+          }),
         }),
       )
       .output(
@@ -102,35 +151,25 @@ export const contract = {
       .meta(
         tauri.transport({
           kind: "stream",
-          id: {
-            name: camelCase("stream_id"),
-            value: () => crypto.randomUUID(),
-          },
-          events: {
-            name: camelCase("event_names"),
-            generator: (streamId) => ({
-              data: `stream:${streamId}:data`,
-              done: `stream:${streamId}:done`,
-              error: `stream:${streamId}:error`,
-            }),
-          },
         }),
       )
       .input(z.void())
-      .output(asyncIteratorObject(SseEventSchema)),
+      .output(asyncIteratorObject(AppEventSchema)),
     streamEventsChannel: oc
       .meta(tauri.command("stream_events_channel"))
       .meta(tauri.transport({ kind: "channel", id: camelCase("on_event") }))
       .input(z.void())
-      .output(asyncIteratorObject(SseEventSchema)),
+      .output(asyncIteratorObject(AppEventSchema)),
   },
   file: {
     uploadFile: oc
       .meta(tauri.command("upload_file"))
       .input(
         z.object({
-          content: z.instanceof(Uint8Array), // Raw bytes
-          filename: z.string(),
+          input: z.object({
+            content: z.instanceof(Uint8Array), // Raw bytes
+            filename: z.string(),
+          }),
         }),
       )
       .output(

@@ -1,24 +1,16 @@
-use crate::sse::Event;
-use serde::{Deserialize, Serialize};
+use crate::broadcast::{AppEvent, Event};
 use std::time::Duration;
 use tauri::ipc::Channel;
 
-/// Stream event data payload for channel
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct StreamChannelData {
-    pub message: String,
-    pub count: i32,
-}
-
 #[tauri::command]
-pub async fn stream_events_channel(on_event: Channel<Event<StreamChannelData>>) {
+pub async fn stream_events_channel(on_event: Channel<Event>) {
     log::info!("Stream events channel command invoked");
 
     // Spawn async task to send events through the channel
     tauri::async_runtime::spawn(async move {
         // 1. FLUSH: Send initial event to establish connection (Axum-style)
         log::info!("Sending flush event to channel");
-        let flush_event: Event<StreamChannelData> = Event::default().comment("flush");
+        let flush_event = Event::default().comment("flush");
         if let Err(e) = on_event.send(flush_event) {
             log::error!("Failed to send flush event: {:?}", e);
             return;
@@ -29,7 +21,7 @@ pub async fn stream_events_channel(on_event: Channel<Event<StreamChannelData>>) 
 
         // 2. EVENTS: Stream actual data events (Axum-style with metadata)
         for i in 1..=5 {
-            let payload = StreamChannelData {
+            let payload = AppEvent::Stream {
                 message: format!("Channel Event {}", i),
                 count: i,
             };
@@ -52,11 +44,11 @@ pub async fn stream_events_channel(on_event: Channel<Event<StreamChannelData>>) 
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
 
-        // 3. CLOSE: Signal completion (Axum-style)
-        log::info!("Sending close event to channel");
-        let close_event: Event<StreamChannelData> = Event::default().event("close");
-        if let Err(e) = on_event.send(close_event) {
-            log::error!("Failed to send close event: {:?}", e);
+        // 3. DONE: Signal stream completion
+        log::info!("Sending done event to channel");
+        let done_event = Event::default().event("done");
+        if let Err(e) = on_event.send(done_event) {
+            log::error!("Failed to send done event: {:?}", e);
         }
 
         log::info!("Stream events channel completed");

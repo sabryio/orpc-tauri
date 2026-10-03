@@ -48,8 +48,10 @@ export function FileUploadTab() {
         const uint8Array = new Uint8Array(arrayBuffer);
 
         const result = await uploadFileMutation.mutateAsync({
-          content: uint8Array,
-          filename: file.name,
+          input: {
+            content: uint8Array,
+            filename: file.name,
+          },
         });
 
         setUploadedFiles((prev) => [...prev, { file, result }]);

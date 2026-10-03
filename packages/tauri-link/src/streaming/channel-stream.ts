@@ -1,73 +1,56 @@
-import { StreamIterator } from "./stream-iterator";
-import { ErrorHandler } from "../errors/error-handler";
-import { handleSseEvent } from "./event-handler";
-import type { SseEvent } from "./sse-types";
-import type { Logger, TauriTransportConfig } from "../types";
-import type {
-  ITauriInvoker,
-  ITauriChannelFactory,
-} from "../adapters/tauri-adapter";
+import { Effect, Stream } from "effect";
+import { TauriChannelFactory } from "../services/channel-factory";
+import { TauriInvoker } from "../services/invoker";
+import { type StreamError } from "../errors";
+import { createQueueStream, forkInvoke } from "./stream-utils";
 
-export class ChannelStreamHandler {
-  constructor(
-    private readonly invoker: ITauriInvoker,
-    private readonly channelFactory: ITauriChannelFactory,
-    private readonly logger: Logger,
-  ) {}
-
-  async *createStream<T>(
-    commandName: string,
-    input?: unknown,
-    transportConfig?: TauriTransportConfig,
-  ): AsyncIterableIterator<T> {
-    const iterator = new StreamIterator<T>();
-    const channel = this.channelFactory.createChannel<SseEvent<T>>();
-
-    channel.onmessage = (message) => {
-      handleSseEvent(message, iterator, commandName, this.logger);
-    };
-
-    try {
-      // Determine channel parameter name
-      let paramName = "onEvent";
-      if (transportConfig?.kind === "channel") {
-        paramName =
-          typeof transportConfig.id === "string"
-            ? transportConfig.id
-            : transportConfig.id.name;
-      }
-
-      // Build args with custom parameter name
-      const channelParam = { [paramName]: channel };
-      const args =
-        input === undefined ? channelParam : { ...input, ...channelParam };
-
-      this.invoker.invoke(commandName, args).catch((error) => {
-        iterator.markFinished();
-        iterator.push({
-          type: "error",
-          error: ErrorHandler.toORPCError(error, "Channel stream failed"),
-        });
-      });
-
-      yield* this.consumeStream(iterator);
-    } finally {
-      iterator.cleanup();
-    }
-  }
-
-  private async *consumeStream<T>(
-    iterator: StreamIterator<T>,
-  ): AsyncIterableIterator<T> {
-    while (true) {
-      const item = await iterator.dequeue();
-      if (item.type === "value") {
-        yield item.value;
-      } else if (item.type === "error") {
-        throw item.error;
-      } else {
-        break;
-      }
-    }
-  }
+/**
+ * SSE event payload structure from Tauri channels.
+ */
+interface SseEvent<T> {
+  readonly event: "message" | "error" | "done";
+  readonly data?: T;
+  readonly error?: unknown;
 }
+
+/**
+ * Creates an Effect.Stream that consumes data from a Tauri Channel.
+ *
+ * DIP: Depends on TauriInvoker and TauriChannelFactory abstractions.
+ * SRP: Single responsibility - converting Tauri Channel callbacks into Effect.Stream.
+ *
+ * The channel is created within a Scope for automatic cleanup.
+ */
+export const createChannelStream = <T>(
+  command: string,
+  input: unknown,
+  paramName: string,
+): Stream.Stream<T, StreamError, TauriInvoker | TauriChannelFactory> =>
+  createQueueStream<T, TauriInvoker | TauriChannelFactory>((emit) =>
+    Effect.gen(function* () {
+      const factory = yield* TauriChannelFactory;
+
+      const channel = yield* factory.createChannel<SseEvent<T>>();
+
+      // Set up channel message handler
+      channel.onmessage = (msg) => {
+        if (msg.event === "message" && msg.data !== undefined) {
+          emit.value(msg.data);
+        } else if (msg.event === "error") {
+          emit.error(msg.error ?? msg);
+        } else if (msg.event === "done") {
+          emit.done();
+        }
+      };
+
+      // Invoke command with channel as parameter (fork it so we don't block)
+      yield* forkInvoke(
+        command,
+        {
+          ...(input as Record<string, unknown>),
+          [paramName]: channel,
+        },
+        emit.error,
+      );
+    }),
+  );

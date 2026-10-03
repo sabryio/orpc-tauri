@@ -1,115 +1,107 @@
-import { ORPCError } from "@orpc/client";
-import { ContractValidator } from "./resolvers/contract-validator";
-import { ProcedureResolver } from "./resolvers/procedure-resolver";
-import { EventStreamHandler } from "./streaming/event-stream";
-import { ChannelStreamHandler } from "./streaming/channel-stream";
-import { ErrorHandler } from "./errors/error-handler";
-import { ConsoleLogger } from "./logger";
-import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+import { Effect, Layer, Stream } from "effect";
+import { streamToAsyncIterator } from "./streaming/stream-adapter";
 import {
-  TauriAdapter,
-  TauriChannelFactory,
-  type ITauriInvoker,
-} from "./adapters/tauri-adapter";
-import type { Contract, CallOptions, TauriLinkOptions, Logger } from "./types";
+	TauriChannelFactory,
+	TauriChannelFactoryLive,
+} from "./services/channel-factory";
+import { TauriInvoker, TauriInvokerLive } from "./services/invoker";
+import { TauriListener, TauriListenerLive } from "./services/listener";
+import { ConsoleLoggerLive } from "./services/logger";
+import { createChannelStream } from "./streaming/channel-stream";
+import { createEventStream } from "./streaming/event-stream";
+import type { EventStreamConfig } from "./streaming/event-stream";
 
-export class TauriLink<TContext = unknown> {
-  private readonly resolver: ProcedureResolver;
-  private readonly eventStream: EventStreamHandler;
-  private readonly channelStream: ChannelStreamHandler;
-  private readonly invoker: ITauriInvoker;
-  private readonly logger: Logger;
+/**
+ * Transport mode for streaming operations.
+ * - "listen": Uses tauri.listen() with custom event names (SSE-style)
+ * - "channel": Uses Tauri Channel API
+ */
+export type TransportMode = "listen" | "channel";
 
-  constructor(contract: Contract, options?: TauriLinkOptions) {
-    this.logger = options?.logger ?? new ConsoleLogger();
-    this.invoker = new TauriAdapter();
+/**
+ * Configuration for a streaming call.
+ */
+export interface StreamConfig {
+	readonly mode: TransportMode;
+	readonly listenConfig?: EventStreamConfig;
+	readonly channelParam?: string;
+}
 
-    const listener = new TauriAdapter();
-    const channelFactory = new TauriChannelFactory();
-    const eventNameStrategy =
-      options?.eventNameStrategy ?? new DefaultEventNameStrategy();
+/**
+ * Effect-based TauriLink orchestrator.
+ *
+ * Coordinates services and streaming to provide typed, resource-safe Tauri IPC.
+ * This is the internal Effect implementation - Phase 7 will wrap this with a
+ * Promise-based facade for backward compatibility.
+ */
+export class EffectTauriLink {
+	/**
+	 * Combined layer providing all Tauri services.
+	 * Public to allow external use and testing.
+	 */
+	static readonly AppLayer = Layer.mergeAll(
+		TauriInvokerLive,
+		TauriListenerLive,
+		TauriChannelFactoryLive,
+		ConsoleLoggerLive,
+	);
 
-    this.resolver = new ProcedureResolver(contract);
-    this.eventStream = new EventStreamHandler(
-      this.invoker,
-      listener,
-      this.logger,
-      eventNameStrategy,
-    );
-    this.channelStream = new ChannelStreamHandler(
-      this.invoker,
-      channelFactory,
-      this.logger,
-    );
+	/**
+	 * Execute a unary (non-streaming) Tauri command.
+	 *
+	 * @param command - Tauri command name (snake_case)
+	 * @param input - Command input parameters
+	 * @returns Effect that requires TauriInvoker service
+	 */
+	static call<TInput, TOutput>(
+		command: string,
+		input: TInput,
+	): Effect.Effect<TOutput, unknown, TauriInvoker> {
+		return Effect.gen(function* () {
+			const invoker = yield* TauriInvoker;
+			return yield* invoker.invoke<TOutput>(
+				command,
+				input as Record<string, unknown>,
+			);
+		});
+	}
 
-    new ContractValidator().validate(contract);
-  }
+	/**
+	 * Execute a streaming Tauri command.
+	 *
+	 * @param command - Tauri command name (snake_case)
+	 * @param input - Command input parameters
+	 * @param config - Stream configuration (event or channel mode)
+	 * @param layer - Layer providing required services (defaults to AppLayer)
+	 * @returns AsyncIterableIterator that yields stream values
+	 */
+	static async *stream<TInput, TOutput>(
+		command: string,
+		input: TInput,
+		config: StreamConfig,
+		layer: Layer.Layer<
+			TauriInvoker | TauriListener | TauriChannelFactory
+		> = EffectTauriLink.AppLayer,
+	): AsyncIterableIterator<TOutput> {
+		// Create stream based on transport mode and provide layer immediately
+		const streamWithServices =
+			config.mode === "listen" && config.listenConfig
+				? createEventStream<TOutput>(command, input, config.listenConfig).pipe(
+						Stream.provide(layer),
+						Stream.scoped,
+					)
+				: config.mode === "channel" && config.channelParam
+					? createChannelStream<TOutput>(
+							command,
+							input,
+							config.channelParam,
+						).pipe(Stream.provide(layer), Stream.scoped)
+					: Stream.fail(
+							new Error(
+								`Invalid stream config: mode=${config.mode}, listenConfig=${!!config.listenConfig}, channelParam=${config.channelParam}`,
+							),
+						).pipe(Stream.scoped);
 
-  async call<TInput, TOutput>(
-    path: string[],
-    input: TInput,
-    callOptions?: CallOptions<TContext>,
-  ): Promise<TOutput> {
-    const commandName = this.resolver.extractCommandName(path);
-    const debug = this.resolver.getDebug(path);
-
-    if (debug) {
-      this.logger.log(`[TauriLink] ${commandName}`, {
-        input,
-        path: path.join("."),
-      });
-    }
-
-    if (callOptions?.signal?.aborted) {
-      throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
-        message: "Request aborted",
-      });
-    }
-
-    try {
-      if (this.resolver.isStreaming(path)) {
-        const transport = this.resolver.getTransport(path);
-        const transportConfig = this.resolver.getTransportConfig(path);
-
-        if (transport === "channel") {
-          return this.channelStream.createStream<TOutput>(
-            commandName,
-            input,
-            transportConfig,
-          ) as TOutput;
-        }
-
-        return this.eventStream.createStream<TOutput>(
-          commandName,
-          input,
-          transportConfig,
-        ) as TOutput;
-      }
-
-      const result = await this.invokeCommand<TInput, TOutput>(
-        commandName,
-        input,
-      );
-
-      if (debug) {
-        this.logger.log(`[TauriLink] ${commandName} →`, result);
-      }
-
-      return result;
-    } catch (error) {
-      if (debug) {
-        this.logger.error(`[TauriLink] ${commandName} ✗`, error);
-      }
-      throw ErrorHandler.toORPCError(error, `${commandName} failed`);
-    }
-  }
-
-  private async invokeCommand<TInput, TOutput>(
-    commandName: string,
-    input: TInput,
-  ): Promise<TOutput> {
-    const args =
-      input === undefined ? {} : { input: input === null ? null : input };
-    return await this.invoker.invoke<TOutput>(commandName, args);
-  }
+		yield* streamToAsyncIterator(streamWithServices);
+	}
 }

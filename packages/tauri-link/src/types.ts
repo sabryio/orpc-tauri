@@ -1,6 +1,5 @@
 import type { ORPCError } from "@orpc/client";
 
-export type { Logger } from "./logger";
 export type Contract = Record<string, unknown>;
 
 // ============================================================================
@@ -10,8 +9,8 @@ export type Contract = Record<string, unknown>;
 export type TauriTransportConfig =
   | {
       kind: "stream";
-      id: { name: string; value: string | (() => string) };
-      events: {
+      id?: { name: string; value: string | (() => string) };
+      events?: {
         name: string;
         generator: (streamId: string) => {
           data: string;
@@ -73,6 +72,6 @@ export interface CallOptions<TContext> {
 }
 
 export interface TauriLinkOptions {
-  logger?: import("./logger").Logger;
+  logger?: import("./services/logger").SimpleLogger;
   eventNameStrategy?: import("./streaming/event-name-strategy").EventNameStrategy;
 }

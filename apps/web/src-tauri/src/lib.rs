@@ -1,5 +1,7 @@
+use tauri::Manager;
+
+mod broadcast;
 mod commands;
-mod sse;
 mod types;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -13,6 +15,11 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Initialize SSE broadcaster for app-wide events
+            let broadcaster = broadcast::AppBroadcaster::new(app.handle().clone());
+            app.manage(broadcaster);
+
             Ok(())
         })
         .manage(commands::planet::PlanetStore::new())

@@ -1,17 +1,61 @@
 {
-  "name": "@tauri-orpc-contract/tauri-link",
+  "name": "orpc-tauri",
   "version": "0.1.0",
+  "description": "Type-safe oRPC link for Tauri IPC with dual streaming support (SSE events and native channels)",
+  "license": "MIT",
+  "author": "Sabry Awad",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/orpc-tauri.git"
+  },
+  "keywords": [
+    "orpc",
+    "tauri",
+    "rpc",
+    "ipc",
+    "typescript",
+    "streaming",
+    "sse",
+    "effect"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./link": {
+      "types": "./dist/link.export.d.ts",
+      "import": "./dist/link.export.js"
+    },
+    "./meta": {
+      "types": "./dist/meta.export.d.ts",
+      "import": "./dist/meta.export.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build && bun run test",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@orpc/client": "^2.0.0-beta.41",
-    "@orpc/contract": "^2.0.0-beta.41",
-    "@tauri-apps/api": "^2.2.0"
+    "@tauri-apps/api": "^2.2.0",
+    "effect": "^4.0.0"
   },
   "devDependencies": {
+    "@effect/language-service": "^0.87.3",
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^5.0.3"
   }
 }

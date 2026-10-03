@@ -1,4 +1,5 @@
 import type { TauriMeta, TauriTransportConfig, MetaPlugin } from "./types";
+import { METADATA_KEYS } from "./constants";
 
 // ============================================================================
 // Merge Logic
@@ -41,11 +42,11 @@ function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
 // ============================================================================
 
 export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
-  name: "~tauri" as const,
+  name: METADATA_KEYS.TAURI,
   init(meta: Record<string, unknown>) {
-    const existing = meta["~tauri"] as TauriMeta | undefined;
+    const existing = meta[METADATA_KEYS.TAURI] as TauriMeta | undefined;
     const merged = mergeTauriMeta(incoming, existing);
-    return { ...meta, "~tauri": merged };
+    return { ...meta, [METADATA_KEYS.TAURI]: merged };
   },
 })) as {
   (meta: TauriMeta): MetaPlugin;
@@ -78,17 +79,8 @@ tauri.debug = (debug): MetaPlugin => tauri({ debug } as TauriMeta);
 export function extractTauriMeta(
   procedure: Record<string, unknown>,
 ): TauriMeta | undefined {
-  const orpcMeta = procedure["~orpc"] as
-    | { meta?: { "~tauri"?: TauriMeta } }
+  const orpcMeta = procedure[METADATA_KEYS.ORPC] as
+    | { meta?: { [METADATA_KEYS.TAURI]?: TauriMeta } }
     | undefined;
-  return orpcMeta?.meta?.["~tauri"];
-}
-
-/**
- * Get Tauri metadata from a procedure (alias for extractTauriMeta)
- */
-export function getTauriMeta(
-  procedure: Record<string, unknown>,
-): TauriMeta | undefined {
-  return extractTauriMeta(procedure);
+  return orpcMeta?.meta?.[METADATA_KEYS.TAURI];
 }

@@ -1,51 +1,71 @@
+import { Effect } from "effect";
+import { ContractValidationError } from "../errors";
 import { extractTauriMeta } from "../metadata";
+import { METADATA_KEYS } from "../constants";
 import type { Contract, ORPCMeta } from "../types";
 
-export class ContractValidator {
-  private readonly commandNames = new Set<string>();
+/**
+ * Validates contract structure for duplicate command names.
+ *
+ * Returns Effect that fails with ContractValidationError if duplicates found.
+ */
+export const validateContract = (
+	contract: Contract,
+): Effect.Effect<void, ContractValidationError> =>
+	Effect.try({
+		try: () => {
+			const commandMap = new Map<string, string[]>();
+			extractCommands(contract, [], commandMap);
+		},
+		catch: (cause) => {
+			if (cause instanceof ContractValidationError) {
+				return cause;
+			}
+			return new ContractValidationError({
+				message:
+					cause instanceof Error ? cause.message : String(cause),
+			});
+		},
+	});
 
-  validate(contract: Contract): void {
-    const commandMap = new Map<string, string[]>();
-    this.extractCommands(contract, [], commandMap);
-  }
+function extractCommands(
+	obj: unknown,
+	path: string[],
+	commandMap: Map<string, string[]>,
+): void {
+	if (!obj || typeof obj !== "object") return;
 
-  private extractCommands(
-    obj: unknown,
-    path: string[],
-    commandMap: Map<string, string[]>,
-  ): void {
-    if (!obj || typeof obj !== "object") return;
+	const orpcMeta = (obj as Record<string, unknown>)[METADATA_KEYS.ORPC] as
+		| ORPCMeta
+		| undefined;
 
-    const orpcMeta = (obj as Record<string, unknown>)["~orpc"] as
-      | ORPCMeta
-      | undefined;
+	if (orpcMeta) {
+		const tauriMeta = extractTauriMeta(obj as Record<string, unknown>);
+		const commandName = tauriMeta?.command;
 
-    if (orpcMeta) {
-      const tauriMeta = extractTauriMeta(obj as Record<string, unknown>);
-      const commandName = tauriMeta?.command;
+		if (commandName) {
+			const procedurePath = path.join(".");
 
-      if (commandName) {
-        const procedurePath = path.join(".");
+			if (commandMap.has(commandName)) {
+				const existingPath = commandMap.get(commandName)!.join(".");
+				throw new ContractValidationError({
+					message:
+						`Duplicate command name detected: "${commandName}"\n` +
+						`  - First defined at: ${existingPath}\n` +
+						`  - Duplicate found at: ${procedurePath}\n` +
+						`Each Tauri command must have a unique name.`,
+					duplicateCommand: commandName,
+					paths: [existingPath, procedurePath],
+				});
+			}
 
-        if (commandMap.has(commandName)) {
-          const existingPath = commandMap.get(commandName)!.join(".");
-          throw new Error(
-            `[TauriLink] Duplicate command name detected: "${commandName}"\n` +
-              `  - First defined at: ${existingPath}\n` +
-              `  - Duplicate found at: ${procedurePath}\n` +
-              `Each Tauri command must have a unique name.`,
-          );
-        }
+			commandMap.set(commandName, path);
+		}
+	}
 
-        commandMap.set(commandName, path);
-        this.commandNames.add(commandName);
-      }
-    }
-
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (key !== "~orpc" && typeof value === "object" && value !== null) {
-        this.extractCommands(value, [...path, key], commandMap);
-      }
-    }
-  }
+	for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+		if (key !== METADATA_KEYS.ORPC && typeof value === "object" && value !== null) {
+			extractCommands(value, [...path, key], commandMap);
+		}
+	}
 }

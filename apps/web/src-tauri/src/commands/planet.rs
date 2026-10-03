@@ -1,3 +1,4 @@
+use crate::broadcast::{AppBroadcaster, AppEvent, PlanetOperation};
 use crate::types::{
     errors::AppError,
     models::{
@@ -35,6 +36,7 @@ impl PlanetStore {
 pub async fn create_planet(
     input: Value,
     store: State<'_, PlanetStore>,
+    broadcaster: State<'_, AppBroadcaster>,
 ) -> Result<Planet, AppError> {
     let create_input: CreatePlanetInput = serde_json::from_value(input)?;
 
@@ -45,12 +47,26 @@ pub async fn create_planet(
 
     let planet = Planet {
         id: *next_id,
-        name: create_input.name,
-        description: create_input.description,
+        name: create_input.name.clone(),
+        description: create_input.description.clone(),
     };
 
     *next_id += 1;
     planets.push(planet.clone());
+
+    // Broadcast planet creation event
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let event = AppEvent::Planet {
+        operation: PlanetOperation::Created,
+        planet_id: Some(planet.id),
+        planet_name: Some(planet.name.clone()),
+        timestamp,
+    };
+    let _ = broadcaster.emit_event(event, timestamp.to_string());
 
     Ok(planet)
 }
@@ -71,7 +87,11 @@ pub async fn find_planet(input: Value, store: State<'_, PlanetStore>) -> Result<
 }
 
 #[tauri::command]
-pub async fn delete_planet(input: Value, store: State<'_, PlanetStore>) -> Result<(), AppError> {
+pub async fn delete_planet(
+    input: Value,
+    store: State<'_, PlanetStore>,
+    broadcaster: State<'_, AppBroadcaster>,
+) -> Result<(), AppError> {
     let delete_input: DeletePlanetInput = serde_json::from_value(input)?;
 
     log::info!("Deleting planet with id: {}", delete_input.id);
@@ -79,6 +99,13 @@ pub async fn delete_planet(input: Value, store: State<'_, PlanetStore>) -> Resul
     let mut planets = store.planets.lock()?;
 
     let initial_len = planets.len();
+
+    // Find planet name before deletion for event
+    let planet_name = planets
+        .iter()
+        .find(|p| p.id == delete_input.id)
+        .map(|p| p.name.clone());
+
     planets.retain(|p| p.id != delete_input.id);
 
     if planets.len() == initial_len {
@@ -88,16 +115,48 @@ pub async fn delete_planet(input: Value, store: State<'_, PlanetStore>) -> Resul
         )));
     }
 
+    // Broadcast planet deletion event
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let event = AppEvent::Planet {
+        operation: PlanetOperation::Deleted,
+        planet_id: Some(delete_input.id),
+        planet_name,
+        timestamp,
+    };
+    let _ = broadcaster.emit_event(event, timestamp.to_string());
+
     Ok(())
 }
 
 #[tauri::command]
-pub async fn list_planets(store: State<'_, PlanetStore>) -> Result<Vec<Planet>, AppError> {
+pub async fn list_planets(
+    store: State<'_, PlanetStore>,
+    broadcaster: State<'_, AppBroadcaster>,
+) -> Result<Vec<Planet>, AppError> {
     log::info!("Listing all planets");
 
     let planets = store.planets.lock()?;
+    let result = planets.clone();
 
-    Ok(planets.clone())
+    // Broadcast list event
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let event = AppEvent::Planet {
+        operation: PlanetOperation::Listed,
+        planet_id: None,
+        planet_name: None,
+        timestamp,
+    };
+    let _ = broadcaster.emit_event(event, timestamp.to_string());
+
+    Ok(result)
 }
 
 #[tauri::command]
