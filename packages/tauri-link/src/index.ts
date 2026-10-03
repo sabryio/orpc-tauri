@@ -8,6 +8,9 @@ export {
 	StreamError,
 	ValidationError,
 	AbortError,
+	ContractValidationError,
+	ProcedureNotFoundError,
+	MissingCommandMetadataError,
 	type CallError,
 } from "./errors";
 

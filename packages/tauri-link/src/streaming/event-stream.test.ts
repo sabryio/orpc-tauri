@@ -260,6 +260,7 @@ describe("createEventStream", () => {
 
 		// Stream extracts sseEvent.data (object payload)
 		const value = events[0];
+		if (!value) throw new Error("Expected value");
 		expect(value.message).toBe("data-with-meta");
 
 		// Check that metadata symbol is attached (old implementation behavior)

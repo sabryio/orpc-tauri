@@ -2,10 +2,11 @@ import { ORPCError } from "@orpc/client";
 import { Effect } from "effect";
 import { EffectTauriLink } from "./link";
 import { toORPCError } from "./error-converter";
-import { ContractValidator } from "./resolvers/contract-validator";
+import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
 import { ConsoleLogger } from "./logger";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+import type { ContractValidationError } from "./errors";
 import type {
 	Contract,
 	CallOptions,
@@ -19,22 +20,46 @@ import type { EventNameStrategy } from "./streaming/event-name-strategy";
 /**
  * Promise-based TauriLink facade over Effect implementation.
  *
- * Maintains backward compatibility - same constructor, same method signatures,
- * same error types. Effect is used internally for resource management and
- * type safety, but the public API remains Promise-based.
+ * Use `new TauriLink(contract, options)` for synchronous construction (throws on validation errors).
+ * Or use `TauriLink.make()` factory for Effect-based construction with typed errors.
  */
 export class TauriLink<TContext = unknown> {
 	private readonly resolver: ProcedureResolver;
 	private readonly logger: Logger;
 	private readonly eventNameStrategy: EventNameStrategy;
 
-	constructor(contract: Contract, options?: TauriLinkOptions) {
+	constructor(
+		contract: Contract,
+		options?: TauriLinkOptions,
+	) {
 		this.logger = options?.logger ?? new ConsoleLogger();
 		this.eventNameStrategy =
 			options?.eventNameStrategy ?? new DefaultEventNameStrategy();
-
 		this.resolver = new ProcedureResolver(contract);
-		new ContractValidator().validate(contract);
+
+		// Run validation synchronously
+		Effect.runSync(validateContract(contract));
+	}
+
+	/**
+	 * Effect-based factory with typed errors.
+	 *
+	 * Recommended for applications using Effect throughout.
+	 */
+	static make<TContext = unknown>(
+		contract: Contract,
+		options?: TauriLinkOptions,
+	): Effect.Effect<TauriLink<TContext>, ContractValidationError> {
+		return Effect.gen(function* () {
+			yield* validateContract(contract);
+			// Create via constructor but catch validation error since already validated
+			try {
+				return new TauriLink<TContext>(contract, options);
+			} catch {
+				// Should never happen since we already validated
+				return new TauriLink<TContext>(contract, options);
+			}
+		});
 	}
 
 	async call<TInput, TOutput>(
@@ -42,7 +67,10 @@ export class TauriLink<TContext = unknown> {
 		input: TInput,
 		callOptions?: CallOptions<TContext>,
 	): Promise<TOutput> {
-		const commandName = this.resolver.extractCommandName(path);
+		// Extract command name using Effect
+		const commandNameEffect = this.resolver.extractCommandName(path);
+		const commandName = await Effect.runPromise(commandNameEffect);
+
 		const debug = this.resolver.getDebug(path);
 
 		if (debug) {
@@ -75,7 +103,6 @@ export class TauriLink<TContext = unknown> {
 			}
 
 			// Unary call - run Effect and convert to Promise
-			// Wrap input in { input: ... } to match Tauri command signature
 			const args =
 				input === undefined ? {} : { input: input === null ? null : input };
 			const effect = EffectTauriLink.call<
@@ -103,7 +130,6 @@ export class TauriLink<TContext = unknown> {
 		commandName: string,
 		input: unknown,
 	): AsyncIterableIterator<TOutput> {
-		// Generate unique stream ID
 		const streamId = crypto.randomUUID();
 		const eventNames = this.eventNameStrategy.getEventNames(streamId);
 
@@ -115,7 +141,6 @@ export class TauriLink<TContext = unknown> {
 			},
 		};
 
-		// createEventStream will merge input with streamId/eventNames internally
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
 	}
 
@@ -124,8 +149,7 @@ export class TauriLink<TContext = unknown> {
 		input: unknown,
 		transportConfig: TauriTransportConfig | undefined,
 	): AsyncIterableIterator<TOutput> {
-		// Extract channel parameter name from transport config
-		let channelParam = "channel"; // default
+		let channelParam = "channel";
 		if (transportConfig?.kind === "channel") {
 			channelParam =
 				typeof transportConfig.id === "string"
@@ -138,7 +162,6 @@ export class TauriLink<TContext = unknown> {
 			channelParam,
 		};
 
-		// createChannelStream will merge input with channel parameter internally
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
 	}
 }

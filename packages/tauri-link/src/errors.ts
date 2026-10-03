@@ -28,6 +28,35 @@ export class StreamError extends Data.TaggedError("StreamError")<{
 /**
  * Error thrown when contract validation fails.
  */
+export class ContractValidationError extends Data.TaggedError(
+	"ContractValidationError",
+)<{
+	readonly message: string;
+	readonly duplicateCommand?: string;
+	readonly paths?: readonly string[];
+}> {}
+
+/**
+ * Error thrown when procedure not found in contract.
+ */
+export class ProcedureNotFoundError extends Data.TaggedError(
+	"ProcedureNotFoundError",
+)<{
+	readonly path: readonly string[];
+}> {}
+
+/**
+ * Error thrown when procedure missing required Tauri command metadata.
+ */
+export class MissingCommandMetadataError extends Data.TaggedError(
+	"MissingCommandMetadataError",
+)<{
+	readonly path: readonly string[];
+}> {}
+
+/**
+ * Error thrown when contract validation fails.
+ */
 export class ValidationError extends Data.TaggedError("ValidationError")<{
 	readonly path: readonly string[];
 	readonly message: string;
@@ -48,4 +77,7 @@ export type CallError =
 	| TauriListenError
 	| StreamError
 	| ValidationError
-	| AbortError;
+	| AbortError
+	| ContractValidationError
+	| ProcedureNotFoundError
+	| MissingCommandMetadataError;
