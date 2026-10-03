@@ -55,30 +55,38 @@ export const contract = {
   planet: {
     deletePlanet: oc
       .meta(tauri.command("delete_planet"))
-      .input(z.object({ id: z.number().int() }))
+      .input(z.object({ input: z.object({ id: z.number().int() }) }))
       .output(z.void())
       .errors(StandardApiErrors),
     createPlanet: oc
       .meta(tauri.command("create_planet"))
       .input(
         z.object({
-          name: z.string(),
-          description: z.string().optional(),
+          input: z.object({
+            name: z.string(),
+            description: z.string().optional(),
+          }),
         }),
       )
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     findPlanet: oc
       .meta(tauri.command("find_planet"))
-      .input(z.object({ id: z.number().int(), q: z.string().optional() }))
+      .input(
+        z.object({
+          input: z.object({ id: z.number().int(), q: z.string().optional() }),
+        }),
+      )
       .output(PlanetSchema)
       .errors(StandardApiErrors),
     listPlanetsPaginated: oc
       .meta(tauri.command("list_planets_paginated"))
       .input(
         z.object({
-          limit: z.number().int(),
-          offset: z.number().int().optional(),
+          input: z.object({
+            limit: z.number().int(),
+            offset: z.number().int().optional(),
+          }),
         }),
       )
       .output(
@@ -127,8 +135,10 @@ export const contract = {
       .meta(tauri.command("upload_file"))
       .input(
         z.object({
-          content: z.instanceof(Uint8Array), // Raw bytes
-          filename: z.string(),
+          input: z.object({
+            content: z.instanceof(Uint8Array), // Raw bytes
+            filename: z.string(),
+          }),
         }),
       )
       .output(

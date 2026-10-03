@@ -1,10 +1,6 @@
 import { Effect, Layer } from "effect";
 import { EffectTauriLink } from "./link";
-import {
-	Logger,
-	ConsoleLoggerLive,
-	fromSimpleLogger,
-} from "./services/logger";
+import { Logger, ConsoleLoggerLive, fromSimpleLogger } from "./services/logger";
 import { toORPCError } from "./error-converter";
 import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
@@ -113,9 +109,11 @@ export class TauriLink<TContext = unknown> {
         return self.createEventStream<TOutput>(commandName, input) as TOutput;
       }
 
-      // Unary call
-      const args =
-        input === undefined ? {} : { input: input === null ? null : input };
+      // Unary call - pass input directly without wrapping
+      const args = (input === undefined ? undefined : input) as Record<
+        string,
+        unknown
+      >;
       const result = yield* EffectTauriLink.call<
         Record<string, unknown>,
         TOutput
