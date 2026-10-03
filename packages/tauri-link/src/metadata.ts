@@ -83,12 +83,3 @@ export function extractTauriMeta(
     | undefined;
   return orpcMeta?.meta?.["~tauri"];
 }
-
-/**
- * Get Tauri metadata from a procedure (alias for extractTauriMeta)
- */
-export function getTauriMeta(
-  procedure: Record<string, unknown>,
-): TauriMeta | undefined {
-  return extractTauriMeta(procedure);
-}

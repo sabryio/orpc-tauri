@@ -15,7 +15,7 @@ export {
 } from "./errors";
 
 // Export metadata utilities
-export { tauri, getTauriMeta, extractTauriMeta } from "./metadata";
+export { tauri, extractTauriMeta } from "./metadata";
 
 // Export logger implementations
 export { ConsoleLogger, NoopLogger } from "./logger";
