@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { oc } from "@orpc/contract";
 import { asyncIteratorObject } from "@orpc/contract";
-import { tauri } from "@tauri-orpc-contract/tauri-link";
+import { tauri } from "@tauri-orpc-contract/tauri-link/meta";
 import { camelCase } from "change-case";
 
 const PlanetSchema = z.object({
