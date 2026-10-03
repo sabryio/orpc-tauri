@@ -56,3 +56,55 @@ export const NoopLoggerLive = Layer.succeed(
 		error: () => Effect.void,
 	}),
 );
+
+/**
+ * Simple logger interface for users who don't want to use Effect.
+ */
+export interface SimpleLogger {
+	log(message: string, data?: unknown): void;
+	error(message: string, error?: unknown): void;
+}
+
+/**
+ * Console-based simple logger.
+ */
+export class ConsoleLogger implements SimpleLogger {
+	log(message: string, data?: unknown): void {
+		if (data !== undefined) {
+			console.log(message, data);
+		} else {
+			console.log(message);
+		}
+	}
+
+	error(message: string, error?: unknown): void {
+		if (error !== undefined) {
+			console.error(message, error);
+		} else {
+			console.error(message);
+		}
+	}
+}
+
+/**
+ * No-op simple logger.
+ */
+export class NoopLogger implements SimpleLogger {
+	log(): void {}
+	error(): void {}
+}
+
+/**
+ * Convert a simple logger class/object to an Effect Layer.
+ */
+export function fromSimpleLogger(logger: SimpleLogger): Layer.Layer<Logger> {
+	return Layer.succeed(
+		Logger,
+		Logger.of({
+			log: (message: string, data?: unknown) =>
+				Effect.sync(() => logger.log(message, data)),
+			error: (message: string, error?: unknown) =>
+				Effect.sync(() => logger.error(message, error)),
+		}),
+	);
+}

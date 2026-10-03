@@ -75,6 +75,6 @@ export interface CallOptions<TContext> {
 }
 
 export interface TauriLinkOptions {
-  loggerLayer?: Layer.Layer<Logger>;
+  logger?: import("./services/logger").SimpleLogger;
   eventNameStrategy?: import("./streaming/event-name-strategy").EventNameStrategy;
 }
