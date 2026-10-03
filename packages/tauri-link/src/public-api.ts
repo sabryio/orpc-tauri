@@ -1,9 +1,9 @@
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { EffectTauriLink } from "./link";
+import { Logger, ConsoleLoggerLive } from "./services/logger";
 import { toORPCError } from "./error-converter";
 import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
-import { ConsoleLogger } from "./logger";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 import { AbortError } from "./errors";
 import type { ContractValidationError } from "./errors";
@@ -11,7 +11,6 @@ import type {
   Contract,
   CallOptions,
   TauriLinkOptions,
-  Logger,
   TauriTransportConfig,
 } from "./types";
 import type { StreamConfig } from "./link";
@@ -25,11 +24,14 @@ import type { EventNameStrategy } from "./streaming/event-name-strategy";
  */
 export class TauriLink<TContext = unknown> {
   private readonly resolver: ProcedureResolver;
-  private readonly logger: Logger;
+  private readonly appLayer;
   private readonly eventNameStrategy: EventNameStrategy;
 
   constructor(contract: Contract, options?: TauriLinkOptions) {
-    this.logger = options?.logger ?? new ConsoleLogger();
+    this.appLayer = Layer.merge(
+      EffectTauriLink.AppLayer,
+      options?.loggerLayer ?? ConsoleLoggerLive,
+    );
     this.eventNameStrategy =
       options?.eventNameStrategy ?? new DefaultEventNameStrategy();
     this.resolver = new ProcedureResolver(contract);
@@ -69,7 +71,7 @@ export class TauriLink<TContext = unknown> {
     path: string[],
     input: TInput,
     callOptions?: CallOptions<TContext>,
-  ): Effect.Effect<TOutput, unknown, never> {
+  ) {
     const self = this;
     return Effect.gen(function* () {
       // Extract command name
@@ -77,12 +79,11 @@ export class TauriLink<TContext = unknown> {
       const debug = self.resolver.getDebug(path);
 
       if (debug) {
-        yield* Effect.sync(() =>
-          self.logger.log(`[TauriLink] ${commandName}`, {
-            input,
-            path: path.join("."),
-          }),
-        );
+        const logger = yield* Logger;
+        yield* logger.log(`[TauriLink] ${commandName}`, {
+          input,
+          path: path.join("."),
+        });
       }
 
       // Check abort signal
@@ -109,18 +110,14 @@ export class TauriLink<TContext = unknown> {
       // Unary call
       const args =
         input === undefined ? {} : { input: input === null ? null : input };
-      const effect = EffectTauriLink.call<Record<string, unknown>, TOutput>(
-        commandName,
-        args,
-      );
-      const result = yield* effect.pipe(
-        Effect.provide(EffectTauriLink.AppLayer),
-      );
+      const result = yield* EffectTauriLink.call<
+        Record<string, unknown>,
+        TOutput
+      >(commandName, args);
 
       if (debug) {
-        yield* Effect.sync(() =>
-          self.logger.log(`[TauriLink] ${commandName} →`, result),
-        );
+        const logger = yield* Logger;
+        yield* logger.log(`[TauriLink] ${commandName} →`, result);
       }
 
       return result;
@@ -132,21 +129,10 @@ export class TauriLink<TContext = unknown> {
     input: TInput,
     callOptions?: CallOptions<TContext>,
   ): Promise<TOutput> {
-    const debug = this.resolver.getDebug(path);
-
     return Effect.runPromise(
       this.callEffect<TInput, TOutput>(path, input, callOptions).pipe(
-        Effect.catch((error) => {
-          if (debug) {
-            return Effect.sync(() => {
-              this.logger.error(`[TauriLink] call error`, error);
-              throw toORPCError(error);
-            });
-          }
-          return Effect.sync(() => {
-            throw toORPCError(error);
-          });
-        }),
+        Effect.provide(this.appLayer),
+        Effect.mapError(toORPCError),
       ),
     );
   }

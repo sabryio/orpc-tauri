@@ -6,6 +6,7 @@ import {
 } from "./services/channel-factory";
 import { TauriInvoker, TauriInvokerLive } from "./services/invoker";
 import { TauriListener, TauriListenerLive } from "./services/listener";
+import { ConsoleLoggerLive } from "./services/logger";
 import { createChannelStream } from "./streaming/channel-stream";
 import { createEventStream } from "./streaming/event-stream";
 import type { EventStreamConfig } from "./streaming/event-stream";
@@ -40,6 +41,7 @@ export class EffectTauriLink {
 		TauriInvokerLive,
 		TauriListenerLive,
 		TauriChannelFactoryLive,
+		ConsoleLoggerLive,
 	);
 
 	/**

@@ -25,12 +25,10 @@ type SseEvent = z.infer<typeof SseEventSchema>;
 // Domain Types - Ping
 // ============================================================================
 
-export const PingResponseSchema = z.object({
+const PingResponseSchema = z.object({
   id: z.uuid(),
   message: z.string(),
 });
-
-export type PingResponse = z.infer<typeof PingResponseSchema>;
 
 // ============================================================================
 // Error Schemas

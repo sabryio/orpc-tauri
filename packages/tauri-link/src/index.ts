@@ -18,13 +18,10 @@ export {
 export { tauri, extractTauriMeta } from "./metadata";
 
 // Export logger implementations
-export { ConsoleLogger, NoopLogger } from "./logger";
+export { ConsoleLoggerLive, NoopLoggerLive, Logger } from "./services/logger";
 
 // Export event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
-
-// Export types
-export type { Logger } from "./logger";
 export type {
 	TauriMeta,
 	TauriTransportConfig,

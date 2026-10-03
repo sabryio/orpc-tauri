@@ -1,6 +1,8 @@
 import type { ORPCError } from "@orpc/client";
+import type { Layer } from "effect";
+import type { Logger } from "./services/logger";
 
-export type { Logger } from "./logger";
+export type { Logger };
 export type Contract = Record<string, unknown>;
 
 // ============================================================================
@@ -73,6 +75,6 @@ export interface CallOptions<TContext> {
 }
 
 export interface TauriLinkOptions {
-  logger?: import("./logger").Logger;
+  loggerLayer?: Layer.Layer<Logger>;
   eventNameStrategy?: import("./streaming/event-name-strategy").EventNameStrategy;
 }
