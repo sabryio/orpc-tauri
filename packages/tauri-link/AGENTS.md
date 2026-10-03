@@ -4,19 +4,40 @@
 
 Custom oRPC link implementation that bridges oRPC contracts to Tauri IPC. Handles unary commands and dual streaming transports (SSE event streaming and Tauri channel streaming). Provides type-safe client for Tauri commands defined in oRPC contracts.
 
+## Learning more about Effect
+
+This repository uses the Effect TypeScript library.
+
+Before writing any Effect code, first read `node_modules/effect/AGENTS.md` **completely**, and follow the links in the file when required.
+
+If you need to learn more about particular Effect APIs and concepts that the guide doesn't cover, search through the source code in `node_modules/effect/src`.
+
 ## Key files
 
-| File                                  | Owns                                                    |
-| ------------------------------------- | ------------------------------------------------------- |
-| src/link.ts                           | Main TauriLink class, routing calls to handlers         |
-| src/adapters/tauri-adapter.ts         | Tauri invoke and listen wrappers                        |
-| src/resolvers/contract-validator.ts   | Contract structure validation                           |
-| src/resolvers/procedure-resolver.ts   | Extract metadata from contract paths                    |
-| src/streaming/event-stream.ts         | SSE event streaming handler                             |
-| src/streaming/channel-stream.ts       | Tauri channel streaming handler                         |
-| src/streaming/event-name-strategy.ts  | Generate unique event names per stream                  |
-| src/errors/error-handler.ts           | Map Tauri errors to ORPCError                           |
-| src/metadata.ts                       | Tauri metadata builder (tauri.command, tauri.transport) |
+| File                                 | Owns                                                    |
+| ------------------------------------ | ------------------------------------------------------- |
+| src/link.ts                          | Main TauriLink class, routing calls to handlers         |
+| src/adapters/tauri-adapter.ts        | Tauri invoke and listen wrappers                        |
+| src/resolvers/contract-validator.ts  | Contract structure validation                           |
+| src/resolvers/procedure-resolver.ts  | Extract metadata from contract paths                    |
+| src/streaming/event-stream.ts        | SSE event streaming handler                             |
+| src/streaming/channel-stream.ts      | Tauri channel streaming handler                         |
+| src/streaming/event-name-strategy.ts | Generate unique event names per stream                  |
+| src/errors/error-handler.ts          | Map Tauri errors to ORPCError                           |
+| src/metadata.ts                      | Tauri metadata builder (tauri.command, tauri.transport) |
+
+## Commands
+
+```bash
+# Type check
+bun run tsc --noEmit
+
+# Run tests
+bun run test
+
+# Run tests in watch mode
+bun run test --watch
+```
 
 ## Conventions
 

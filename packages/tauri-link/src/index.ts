@@ -1,21 +1,40 @@
-export { TauriLink } from "./link";
+// Export v2 TauriLink (Effect-based implementation with Promise facade)
+export { TauriLink } from "./v2/public-api";
+
+// Export typed error classes for power users (optional advanced usage)
+export {
+	TauriInvokeError,
+	TauriListenError,
+	StreamError,
+	ValidationError,
+	AbortError,
+	type CallError,
+} from "./v2/errors";
+
+// Export metadata utilities
 export { tauri, getTauriMeta, extractTauriMeta } from "./metadata";
+
+// Export logger implementations
 export { ConsoleLogger, NoopLogger } from "./logger";
+
+// Export event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+
+// Export types
 export type { Logger } from "./logger";
 export type {
-  TauriMeta,
-  TauriTransportConfig,
-  TauriLinkOptions,
-  MetaPlugin,
-  Contract,
-  CallOptions,
-  StreamEvent,
-  TauriErrorPayload,
+	TauriMeta,
+	TauriTransportConfig,
+	TauriLinkOptions,
+	MetaPlugin,
+	Contract,
+	CallOptions,
+	StreamEvent,
+	TauriErrorPayload,
 } from "./types";
 export type { SseEvent, EventMeta } from "./streaming/sse-types";
 export type {
-  EventNameStrategy,
-  StreamEventNames,
+	EventNameStrategy,
+	StreamEventNames,
 } from "./streaming/event-name-strategy";
 export { EVENT_META_SYMBOL } from "./streaming/sse-types";
