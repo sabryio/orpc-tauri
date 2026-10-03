@@ -82,10 +82,19 @@ export class TauriLink<TContext = unknown> {
 				Record<string, unknown>,
 				TOutput
 			>(commandName, args);
-			return await Effect.runPromise(
+			const result = await Effect.runPromise(
 				effect.pipe(Effect.provide(EffectTauriLink.AppLayer)),
 			);
+
+			if (debug) {
+				this.logger.log(`[TauriLink] ${commandName} →`, result);
+			}
+
+			return result;
 		} catch (error) {
+			if (debug) {
+				this.logger.error(`[TauriLink] ${commandName} ✗`, error);
+			}
 			throw toORPCError(error);
 		}
 	}
