@@ -83,7 +83,7 @@ export class ProcedureResolver {
 	 */
 	getTransport(path: readonly string[]): "emit-listen" | "channel" {
 		const procedure = this.resolve(path);
-		if (!procedure) return "emit-listen";
+		if (!procedure) return "channel";
 
 		const tauriMeta = extractTauriMeta(procedure);
 
@@ -91,7 +91,7 @@ export class ProcedureResolver {
 			return tauriMeta.transport.kind === "channel" ? "channel" : "emit-listen";
 		}
 
-		return "emit-listen";
+		return "channel";
 	}
 
 	/**
