@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/client";
 import { Effect } from "effect";
 import { EffectTauriLink } from "./link";
+import { toORPCError } from "./error-converter";
 import { ContractValidator } from "../resolvers/contract-validator";
 import { ProcedureResolver } from "../resolvers/procedure-resolver";
 import { ConsoleLogger } from "../logger";
@@ -85,7 +86,7 @@ export class TauriLink<TContext = unknown> {
 				effect.pipe(Effect.provide(EffectTauriLink.AppLayer)),
 			);
 		} catch (error) {
-			throw this.toORPCError(error);
+			throw toORPCError(error);
 		}
 	}
 
@@ -94,7 +95,7 @@ export class TauriLink<TContext = unknown> {
 		input: unknown,
 	): AsyncIterableIterator<TOutput> {
 		// Generate unique stream ID
-		const streamId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+		const streamId = crypto.randomUUID();
 		const eventNames = this.eventNameStrategy.getEventNames(streamId);
 
 		const config: StreamConfig = {
@@ -130,68 +131,5 @@ export class TauriLink<TContext = unknown> {
 
 		// createChannelStream will merge input with channel parameter internally
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
-	}
-
-	private toORPCError(error: unknown): ORPCError<string, unknown> {
-		// Unwrap Effect errors (TauriInvokeError, etc.) to get the original Tauri error
-		const unwrapped =
-			error &&
-			typeof error === "object" &&
-			"cause" in error &&
-			error.cause !== undefined
-				? error.cause
-				: error;
-
-		// Check if it's a Tauri error payload with code/message/data structure
-		if (
-			typeof unwrapped === "object" &&
-			unwrapped !== null &&
-			"code" in unwrapped &&
-			typeof unwrapped.code === "string" &&
-			"message" in unwrapped &&
-			typeof (unwrapped as any).message === "string"
-		) {
-			const tauriError = unwrapped as {
-				code: string;
-				message: string;
-				data?: unknown;
-				defined?: boolean;
-			};
-
-			const orpcError = new ORPCError(tauriError.code, {
-				message: tauriError.message,
-				data: tauriError.data,
-			});
-
-			// Preserve 'defined' flag for contract-defined errors
-			if (tauriError.defined === true) {
-				Object.defineProperty(orpcError, "defined", {
-					value: true,
-					writable: false,
-					enumerable: true,
-					configurable: false,
-				});
-			}
-
-			return orpcError;
-		}
-
-		// Already an ORPCError
-		if (unwrapped instanceof ORPCError) {
-			return unwrapped;
-		}
-
-		// Generic error fallback
-		if (unwrapped instanceof Error) {
-			return new ORPCError("INTERNAL_ERROR", {
-				message: unwrapped.message,
-				cause: unwrapped,
-			});
-		}
-
-		return new ORPCError("INTERNAL_ERROR", {
-			message: "Unknown error",
-			cause: unwrapped,
-		});
 	}
 }
