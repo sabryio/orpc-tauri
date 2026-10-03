@@ -6,7 +6,8 @@
   "author": "Sabry Awad",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/orpc-tauri.git"
+    "url": "https://github.com/sabryio/tauri-orpc-contract.git",
+    "directory": "packages/tauri-link"
   },
   "keywords": [
     "orpc",
