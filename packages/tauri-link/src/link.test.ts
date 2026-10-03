@@ -84,8 +84,8 @@ describe("EffectTauriLink", () => {
 				"stream_command",
 				{},
 				{
-					mode: "event",
-					eventConfig: {
+					mode: "listen",
+					listenConfig: {
 						streamId: () => "test-123",
 						getEventNames: (id: string) => ({
 							data: `${id}:data`,

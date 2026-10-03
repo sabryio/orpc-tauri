@@ -13,15 +13,17 @@ import type { EventStreamConfig } from "./streaming/event-stream";
 
 /**
  * Transport mode for streaming operations.
+ * - "listen": Uses tauri.listen() with custom event names (SSE-style)
+ * - "channel": Uses Tauri Channel API
  */
-export type TransportMode = "event" | "channel";
+export type TransportMode = "listen" | "channel";
 
 /**
  * Configuration for a streaming call.
  */
 export interface StreamConfig {
 	readonly mode: TransportMode;
-	readonly eventConfig?: EventStreamConfig;
+	readonly listenConfig?: EventStreamConfig;
 	readonly channelParam?: string;
 }
 
@@ -83,8 +85,8 @@ export class EffectTauriLink {
 	): AsyncIterableIterator<TOutput> {
 		// Create stream based on transport mode and provide layer immediately
 		const streamWithServices =
-			config.mode === "event" && config.eventConfig
-				? createEventStream<TOutput>(command, input, config.eventConfig).pipe(
+			config.mode === "listen" && config.listenConfig
+				? createEventStream<TOutput>(command, input, config.listenConfig).pipe(
 						Stream.provide(layer),
 						Stream.scoped,
 					)
@@ -96,7 +98,7 @@ export class EffectTauriLink {
 						).pipe(Stream.provide(layer), Stream.scoped)
 					: Stream.fail(
 							new Error(
-								`Invalid stream config: mode=${config.mode}, eventConfig=${!!config.eventConfig}, channelParam=${config.channelParam}`,
+								`Invalid stream config: mode=${config.mode}, listenConfig=${!!config.listenConfig}, channelParam=${config.channelParam}`,
 							),
 						).pipe(Stream.scoped);
 

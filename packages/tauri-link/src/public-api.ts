@@ -10,6 +10,7 @@ import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 import { AbortError } from "./errors";
+import { DEFAULT_PARAMS } from "./constants";
 import type { ContractValidationError } from "./errors";
 import type {
   Contract,
@@ -150,8 +151,8 @@ export class TauriLink<TContext = unknown> {
     const eventNames = this.eventNameStrategy.getEventNames(streamId);
 
     const config: StreamConfig = {
-      mode: "event",
-      eventConfig: {
+      mode: "listen",
+      listenConfig: {
         streamId: () => streamId,
         getEventNames: () => eventNames,
       },
@@ -165,7 +166,7 @@ export class TauriLink<TContext = unknown> {
     input: unknown,
     transportConfig: TauriTransportConfig | undefined,
   ): AsyncIterableIterator<TOutput> {
-    let channelParam = "channel";
+    let channelParam: string = DEFAULT_PARAMS.CHANNEL;
     if (transportConfig?.kind === "channel") {
       channelParam =
         typeof transportConfig.id === "string"

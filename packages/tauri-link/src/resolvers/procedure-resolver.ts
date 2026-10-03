@@ -4,6 +4,7 @@ import {
 	MissingCommandMetadataError,
 } from "../errors";
 import { extractTauriMeta } from "../metadata";
+import { METADATA_KEYS, ORPC_SYMBOLS } from "../constants";
 import type { Contract, ORPCMeta, TauriTransportConfig } from "../types";
 
 /**
@@ -60,7 +61,7 @@ export class ProcedureResolver {
 		const procedure = this.resolve(path);
 		if (!procedure) return false;
 
-		const orpcMeta = procedure["~orpc"] as ORPCMeta | undefined;
+		const orpcMeta = procedure[METADATA_KEYS.ORPC] as ORPCMeta | undefined;
 		if (!orpcMeta) return false;
 
 		const outputSchemas = orpcMeta.outputSchemas;
@@ -74,21 +75,21 @@ export class ProcedureResolver {
 
 		const symbols = Object.getOwnPropertySymbols(standard);
 		return symbols.some((sym) =>
-			sym.toString().includes("ORPC_ASYNC_ITERATOR_OBJECT_SCHEMA_DETAILS"),
+			sym.toString().includes(ORPC_SYMBOLS.ASYNC_ITERATOR),
 		);
 	}
 
 	/**
-	 * Get transport mode (emit-listen or channel).
+	 * Get transport mode (listen or channel).
 	 */
-	getTransport(path: readonly string[]): "emit-listen" | "channel" {
+	getTransport(path: readonly string[]): "listen" | "channel" {
 		const procedure = this.resolve(path);
 		if (!procedure) return "channel";
 
 		const tauriMeta = extractTauriMeta(procedure);
 
 		if (tauriMeta?.transport) {
-			return tauriMeta.transport.kind === "channel" ? "channel" : "emit-listen";
+			return tauriMeta.transport.kind === "channel" ? "channel" : "listen";
 		}
 
 		return "channel";

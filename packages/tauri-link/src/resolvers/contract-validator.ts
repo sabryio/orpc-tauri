@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { ContractValidationError } from "../errors";
 import { extractTauriMeta } from "../metadata";
+import { METADATA_KEYS } from "../constants";
 import type { Contract, ORPCMeta } from "../types";
 
 /**
@@ -34,7 +35,7 @@ function extractCommands(
 ): void {
 	if (!obj || typeof obj !== "object") return;
 
-	const orpcMeta = (obj as Record<string, unknown>)["~orpc"] as
+	const orpcMeta = (obj as Record<string, unknown>)[METADATA_KEYS.ORPC] as
 		| ORPCMeta
 		| undefined;
 
@@ -63,7 +64,7 @@ function extractCommands(
 	}
 
 	for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-		if (key !== "~orpc" && typeof value === "object" && value !== null) {
+		if (key !== METADATA_KEYS.ORPC && typeof value === "object" && value !== null) {
 			extractCommands(value, [...path, key], commandMap);
 		}
 	}

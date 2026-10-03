@@ -1,8 +1,5 @@
 import type { ORPCError } from "@orpc/client";
-import type { Layer } from "effect";
-import type { Logger } from "./services/logger";
 
-export type { Logger };
 export type Contract = Record<string, unknown>;
 
 // ============================================================================

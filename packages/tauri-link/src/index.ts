@@ -18,10 +18,7 @@ export {
 export { tauri, extractTauriMeta } from "./metadata";
 
 // Export simple logger classes and type
-export {
-	ConsoleLogger,
-	NoopLogger,
-} from "./services/logger";
+export { ConsoleLogger, NoopLogger } from "./services/logger";
 export type { SimpleLogger } from "./services/logger";
 
 // Export event name strategy
