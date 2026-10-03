@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::time::Duration;
 
-/// Server-Sent Event builder, matching Axum's SSE Event pattern.
+/// Server-Sent Event builder, matching Axum's SSE Event pattern exactly.
 ///
 /// This allows seamless migration from Tauri to Axum by using the same API:
 /// ```rust
@@ -11,8 +11,8 @@ use std::time::Duration;
 ///     .retry(Duration::from_secs(5))
 ///     .data(payload)
 /// ```
-#[derive(Debug, Clone, Serialize)]
-pub struct Event<T = ()> {
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct Event {
     /// Optional event name (maps to `event:` field in SSE)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub event: Option<String>,
@@ -30,28 +30,12 @@ pub struct Event<T = ()> {
     pub comment: Option<String>,
 
     /// Event data payload (maps to `data:` field in SSE)
+    /// Stored as JSON Value for flexibility
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<T>,
+    pub data: Option<serde_json::Value>,
 }
 
-impl<T> Default for Event<T> {
-    fn default() -> Self {
-        Self {
-            event: None,
-            id: None,
-            retry: None,
-            comment: None,
-            data: None,
-        }
-    }
-}
-
-impl<T> Event<T> {
-    /// Create a new empty event
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl Event {
     /// Set the event name field (`event:<event-name>`)
     ///
     /// This corresponds to the `type` parameter in `addEventListener` on an EventSource.
@@ -88,8 +72,10 @@ impl<T> Event<T> {
     /// Set the event's data field (`data: <content>`)
     ///
     /// This corresponds to MessageEvent's data field.
-    pub fn data(mut self, data: T) -> Self {
-        self.data = Some(data);
+    /// Accepts any type that can be serialized to JSON.
+    pub fn data<T: Serialize>(mut self, data: T) -> Self {
+        // Convert to serde_json::Value for consistent handling
+        self.data = serde_json::to_value(data).ok();
         self
     }
 }

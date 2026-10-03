@@ -6,7 +6,7 @@ import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 import { AbortError } from "./errors";
-import { DEFAULT_PARAMS } from "./constants";
+import { DEFAULT_PARAMS, GLOBAL_EVENT_NAMES } from "./constants";
 import type { ContractValidationError } from "./errors";
 import type {
   Contract,
@@ -106,7 +106,11 @@ export class TauriLink<TContext = unknown> {
           ) as TOutput;
         }
 
-        return self.createEventStream<TOutput>(commandName, input) as TOutput;
+        return self.createEventStream<TOutput>(
+          commandName,
+          input,
+          transportConfig,
+        ) as TOutput;
       }
 
       // Unary call - pass input directly without wrapping
@@ -144,9 +148,51 @@ export class TauriLink<TContext = unknown> {
   private createEventStream<TOutput>(
     commandName: string,
     input: unknown,
+    transportConfig: TauriTransportConfig | undefined,
   ): AsyncIterableIterator<TOutput> {
-    const streamId = crypto.randomUUID();
-    const eventNames = this.eventNameStrategy.getEventNames(streamId);
+    // Check if transport config has stream ID configuration
+    const hasStreamIdConfig =
+      transportConfig?.kind === "stream" && transportConfig.id;
+
+    let streamId: string;
+    let eventNames: { data: string; error: string; done: string };
+    let inputWithStreamParams: unknown;
+
+    if (hasStreamIdConfig && transportConfig.kind === "stream") {
+      // Case 1: Unique stream ID per call (default behavior)
+      const idValue = transportConfig.id!.value;
+      streamId = typeof idValue === "function" ? idValue() : idValue;
+
+      // Use custom event generator or default strategy
+      if (transportConfig.events) {
+        eventNames = transportConfig.events.generator(streamId);
+        // Include both streamId and eventNames in input
+        inputWithStreamParams = {
+          ...(input as Record<string, unknown>),
+          [transportConfig.id!.name]: streamId,
+          [transportConfig.events.name]: eventNames,
+        };
+      } else {
+        // Use default event name strategy with unique stream ID
+        eventNames = this.eventNameStrategy.getEventNames(streamId);
+        // Include only streamId in input
+        inputWithStreamParams = {
+          ...(input as Record<string, unknown>),
+          [transportConfig.id!.name]: streamId,
+        };
+      }
+    } else {
+      // Case 2: Global event names (no stream ID in input)
+      // Use global default event names without unique ID
+      streamId = ""; // No stream ID
+      eventNames = {
+        data: GLOBAL_EVENT_NAMES.DATA,
+        error: GLOBAL_EVENT_NAMES.ERROR,
+        done: GLOBAL_EVENT_NAMES.DONE,
+      };
+      // Don't add any stream parameters to input
+      inputWithStreamParams = input;
+    }
 
     const config: StreamConfig = {
       mode: "listen",
@@ -156,7 +202,11 @@ export class TauriLink<TContext = unknown> {
       },
     };
 
-    return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
+    return EffectTauriLink.stream<unknown, TOutput>(
+      commandName,
+      inputWithStreamParams,
+      config,
+    );
   }
 
   private createChannelStream<TOutput>(

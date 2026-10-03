@@ -3,6 +3,16 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
+/// Global SSE event names (matches GLOBAL_EVENT_NAMES in tauri-link/constants.ts)
+pub mod event_names {
+    /// Data event - emitted for each stream item
+    pub const DATA: &str = "data";
+    /// Done event - emitted when stream completes successfully
+    pub const DONE: &str = "done";
+    /// Error event - emitted when stream encounters an error
+    pub const ERROR: &str = "error";
+}
+
 /// Stream event data payload
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StreamEventData {
@@ -10,31 +20,18 @@ pub struct StreamEventData {
     pub count: i32,
 }
 
-/// Event names received from frontend
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EventNames {
-    pub data: String,
-    pub done: String,
-    pub error: String,
-}
-
 #[tauri::command]
-pub async fn stream_events(app: AppHandle, stream_id: String, event_names: EventNames) {
-    log::info!(
-        "Stream events command invoked with stream_id: {} and event_names: {:?}",
-        stream_id,
-        event_names
-    );
+pub async fn stream_events(app: AppHandle) {
+    log::info!("Stream events command invoked (global event mode)");
 
     // Spawn async task to emit events
     tauri::async_runtime::spawn(async move {
         // 1. FLUSH: Send initial event to establish connection (Axum-style)
-        log::info!("Sending flush event for stream: {}", stream_id);
-        let flush_event: Event<()> = Event::default().comment("flush");
-        if let Err(e) = app.emit(&event_names.data, &flush_event) {
+        log::info!("Sending flush event");
+        let flush_event = Event::default().comment("flush");
+        if let Err(e) = app.emit(event_names::DATA, &flush_event) {
             log::error!("Failed to emit flush event: {:?}", e);
-            let _ = app.emit(&event_names.error, "Failed to establish stream");
+            let _ = app.emit(event_names::ERROR, "Failed to establish stream");
             return;
         }
 
@@ -44,7 +41,7 @@ pub async fn stream_events(app: AppHandle, stream_id: String, event_names: Event
         // 2. EVENTS: Stream actual data events (Axum-style with id and retry)
         for i in 1..=5 {
             let payload = StreamEventData {
-                message: format!("Event {} [stream_id: {}]", i, stream_id),
+                message: format!("Event {} (global)", i),
                 count: i,
             };
 
@@ -57,9 +54,9 @@ pub async fn stream_events(app: AppHandle, stream_id: String, event_names: Event
                 .retry(Duration::from_secs(5))
                 .data(payload);
 
-            if let Err(e) = app.emit(&event_names.data, &event) {
+            if let Err(e) = app.emit(event_names::DATA, &event) {
                 log::error!("Failed to emit event {}: {:?}", i, e);
-                let _ = app.emit(&event_names.error, "Failed to emit event");
+                let _ = app.emit(event_names::ERROR, "Failed to emit event");
                 return;
             }
 
@@ -68,11 +65,11 @@ pub async fn stream_events(app: AppHandle, stream_id: String, event_names: Event
         }
 
         // 3. DONE: Signal stream completion
-        log::info!("Sending done event for stream: {}", stream_id);
-        if let Err(e) = app.emit(&event_names.done, ()) {
+        log::info!("Sending done event");
+        if let Err(e) = app.emit(event_names::DONE, ()) {
             log::error!("Failed to emit done event: {:?}", e);
         }
 
-        log::info!("Stream events completed for: {}", stream_id);
+        log::info!("Stream events completed");
     });
 }

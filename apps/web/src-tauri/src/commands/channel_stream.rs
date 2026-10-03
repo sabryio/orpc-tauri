@@ -11,14 +11,14 @@ pub struct StreamChannelData {
 }
 
 #[tauri::command]
-pub async fn stream_events_channel(on_event: Channel<Event<StreamChannelData>>) {
+pub async fn stream_events_channel(on_event: Channel<Event>) {
     log::info!("Stream events channel command invoked");
 
     // Spawn async task to send events through the channel
     tauri::async_runtime::spawn(async move {
         // 1. FLUSH: Send initial event to establish connection (Axum-style)
         log::info!("Sending flush event to channel");
-        let flush_event: Event<StreamChannelData> = Event::default().comment("flush");
+        let flush_event = Event::default().comment("flush");
         if let Err(e) = on_event.send(flush_event) {
             log::error!("Failed to send flush event: {:?}", e);
             return;
@@ -54,7 +54,7 @@ pub async fn stream_events_channel(on_event: Channel<Event<StreamChannelData>>) 
 
         // 3. CLOSE: Signal completion (Axum-style)
         log::info!("Sending close event to channel");
-        let close_event: Event<StreamChannelData> = Event::default().event("close");
+        let close_event = Event::default().event("close");
         if let Err(e) = on_event.send(close_event) {
             log::error!("Failed to send close event: {:?}", e);
         }

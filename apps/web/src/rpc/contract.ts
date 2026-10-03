@@ -108,18 +108,6 @@ export const contract = {
       .meta(
         tauri.transport({
           kind: "stream",
-          id: {
-            name: camelCase("stream_id"),
-            value: () => crypto.randomUUID(),
-          },
-          events: {
-            name: camelCase("event_names"),
-            generator: (streamId) => ({
-              data: `stream:${streamId}:data`,
-              done: `stream:${streamId}:done`,
-              error: `stream:${streamId}:error`,
-            }),
-          },
         }),
       )
       .input(z.void())
