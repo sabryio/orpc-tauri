@@ -6,7 +6,7 @@
   "author": "Sabry Awad",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sabryio/tauri-orpc-contract.git",
+    "url": "git+https://github.com/sabryio/tauri-orpc-contract.git",
     "directory": "packages/tauri-link"
   },
   "keywords": [
@@ -41,9 +41,14 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "clean": "rm -rf dist",
+    "pack:dry": "npm pack --dry-run",
+    "release:pack": "npm pack",
     "prepublishOnly": "bun run clean && bun run build && bun run test",
     "test": "vitest run",
     "test:watch": "vitest"
