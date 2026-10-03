@@ -25,6 +25,7 @@
         "@orpc/client": "^2.0.0-beta.41",
         "@orpc/contract": "^2.0.0-beta.41",
         "@orpc/tanstack-query": "^2.0.0-beta.41",
+        "@sabryio/orpc-tauri": "npm:@jsr/sabryio__orpc-tauri@0.1.1",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-query": "^5.104.0",
         "@tanstack/react-router": "^1.170.32",
@@ -32,7 +33,6 @@
         "@varlock/vite-integration": "1.5.1",
         "change-case": "^5.4.4",
         "lucide-react": "catalog:",
-        "orpc-tauri": "workspace:*",
         "react": "catalog:",
         "react-dom": "catalog:",
         "react-dropzone": "^20.1.2",
@@ -61,7 +61,7 @@
     },
     "packages/tauri-link": {
       "name": "orpc-tauri",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@orpc/client": "^2.0.0-beta.41",
         "@tauri-apps/api": "^2.2.0",
@@ -300,6 +300,8 @@
     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.2.12", "", { "os": "win32", "cpu": "x64" }, "sha512-WIw2haVKwjuYdXkHaoC0mF8Le71TuCBxjrdKqLbJGctbBABj+ClfmNvtbOnzpq3RokNo5+V1qhtSzJyXorsklQ=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+
+    "@sabryio/orpc-tauri": ["@jsr/sabryio__orpc-tauri@0.1.1", "https://npm.jsr.io/~/11/@jsr/sabryio__orpc-tauri/0.1.1.tgz", { "dependencies": { "@orpc/client": "^2.0.0-beta.41", "@tauri-apps/api": "^2.2.0", "effect": "^4.0.0" } }, "sha512-FeiVq725Rxw+CqYNAzdhJ1GrRr1dtro8d3LRbNsY8iVMkG2z6XonCqt+klmapOixYabbgx4SrOy7NSLBuOLDbw=="],
 
     "@sec-ant/readable-stream": ["@sec-ant/readable-stream@0.4.1", "", {}, "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg=="],
 
