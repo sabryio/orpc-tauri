@@ -13,6 +13,9 @@ pub mod event_names {
     pub const ERROR: &str = "error";
 }
 
+/// Type alias for the application-wide event broadcaster
+pub type AppBroadcaster = SseBroadcaster<AppEvent>;
+
 /// Server-Sent Event builder, matching Axum's SSE Event pattern exactly.
 ///
 /// This allows seamless migration from Tauri to Axum by using the same API:
@@ -92,54 +95,126 @@ impl Event {
     }
 }
 
-/// Broadcast SSE manager - can be used from any command handler
-/// Similar to Axum's SSE broadcasting pattern
-#[derive(Clone)]
-pub struct SseBroadcaster {
-    app: Arc<AppHandle>,
+/// Application-wide stream event types
+/// Tagged union for type-safe event broadcasting across all features
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", content = "data")]
+pub enum AppEvent {
+    /// Stream demonstration events
+    #[serde(rename = "stream")]
+    Stream { message: String, count: i32 },
+
+    /// Planet CRUD operation events
+    #[serde(rename = "planet")]
+    Planet {
+        operation: PlanetOperation,
+        planet_id: Option<i32>,
+        planet_name: Option<String>,
+        timestamp: u64,
+    },
+
+    /// System/health check events
+    #[serde(rename = "system")]
+    #[allow(dead_code)]
+    System {
+        status: SystemStatus,
+        message: String,
+    },
 }
 
-impl SseBroadcaster {
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PlanetOperation {
+    Created,
+    #[allow(dead_code)]
+    Updated,
+    Deleted,
+    Listed,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SystemStatus {
+    #[allow(dead_code)]
+    Healthy,
+    #[allow(dead_code)]
+    Warning,
+    #[allow(dead_code)]
+    Error,
+}
+
+/// Broadcast SSE manager - can be used from any command handler
+/// Similar to Axum's SSE broadcasting pattern
+/// Production-ready with structured logging and error handling
+/// Generic over the event data type to ensure type safety
+#[derive(Clone)]
+pub struct SseBroadcaster<T: Serialize + Clone> {
+    app: Arc<AppHandle>,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T: Serialize + Clone> SseBroadcaster<T> {
     /// Create a new broadcaster with the app handle
     pub fn new(app: AppHandle) -> Self {
-        Self { app: Arc::new(app) }
+        log::info!("Initializing SSE broadcaster");
+        Self {
+            app: Arc::new(app),
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Emit a data event to all connected clients
-    pub fn emit_data(&self, event: Event) -> Result<(), String> {
-        self.app
-            .emit(event_names::DATA, &event)
-            .map_err(|e| e.to_string())
+    fn emit_data(&self, event: Event) -> Result<(), String> {
+        self.app.emit(event_names::DATA, &event).map_err(|e| {
+            log::error!("Failed to emit data event: {:?}", e);
+            e.to_string()
+        })
     }
 
     /// Emit an error event to all connected clients
-    pub fn emit_error<T: Serialize>(&self, error: T) -> Result<(), String> {
-        self.app
-            .emit(event_names::ERROR, &error)
-            .map_err(|e| e.to_string())
+    pub fn emit_error<E: Serialize>(&self, error: E) -> Result<(), String> {
+        log::warn!("Broadcasting error event");
+        self.app.emit(event_names::ERROR, &error).map_err(|e| {
+            log::error!("Failed to emit error event: {:?}", e);
+            e.to_string()
+        })
     }
 
     /// Emit a done event to all connected clients
     pub fn emit_done(&self) -> Result<(), String> {
-        self.app
-            .emit(event_names::DONE, ())
-            .map_err(|e| e.to_string())
+        log::debug!("Broadcasting done event");
+        self.app.emit(event_names::DONE, ()).map_err(|e| {
+            log::error!("Failed to emit done event: {:?}", e);
+            e.to_string()
+        })
     }
 
-    /// Convenience method to emit a flush event (establish connection)
+    /// Emit a flush event to establish connection (Axum-style keep-alive)
     pub fn emit_flush(&self) -> Result<(), String> {
+        log::debug!("Broadcasting flush event");
         let flush_event = Event::default().comment("flush");
         self.emit_data(flush_event)
     }
 
-    /// Convenience method to emit a typed data event with metadata
-    /// Event type: "message", retry: 5 seconds
-    pub fn emit_event<T: Serialize>(&self, data: T, id: String) -> Result<(), String> {
-        let event = Event::default()
+    /// Emit a typed application event with metadata
+    ///
+    /// # Arguments
+    /// * `event` - The application event to broadcast
+    /// * `id` - Unique event identifier (used for deduplication and ordering)
+    ///
+    /// # Production considerations
+    /// - Uses "message" as default event type for compatibility
+    /// - 5-second retry ensures reliable reconnection
+    /// - Structured logging for observability
+    pub fn emit_event(&self, event: T, id: String) -> Result<(), String> {
+        log::trace!("Broadcasting app event with id: {}", id);
+
+        let sse_event = Event::default()
             .event("message")
             .id(id)
             .retry(Duration::from_secs(5))
-            .data(data);
-        self.emit_data(event)
+            .data(event);
+
+        self.emit_data(sse_event)
     }
 }

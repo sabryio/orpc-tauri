@@ -8,7 +8,7 @@ import { createQueueStream, forkInvoke } from "./stream-utils";
  * SSE event payload structure from Tauri channels.
  */
 interface SseEvent<T> {
-  readonly event: "message" | "error" | "complete";
+  readonly event: "message" | "error" | "done";
   readonly data?: T;
   readonly error?: unknown;
 }
@@ -38,7 +38,7 @@ export const createChannelStream = <T>(
           emit.value(msg.data);
         } else if (msg.event === "error") {
           emit.error(msg.error ?? msg);
-        } else if (msg.event === "complete") {
+        } else if (msg.event === "done") {
           emit.done();
         }
       };

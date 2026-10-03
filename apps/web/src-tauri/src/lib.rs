@@ -16,8 +16,8 @@ pub fn run() {
                 )?;
             }
 
-            // Initialize SSE broadcaster
-            let broadcaster = broadcast::SseBroadcaster::new(app.handle().clone());
+            // Initialize SSE broadcaster for app-wide events
+            let broadcaster = broadcast::AppBroadcaster::new(app.handle().clone());
             app.manage(broadcaster);
 
             Ok(())

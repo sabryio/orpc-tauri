@@ -11,15 +11,58 @@ const PlanetSchema = z.object({
 });
 
 // ============================================================================
-// SSE Event Types
+// SSE Event Types - Discriminated Union matching Rust AppEvent enum
 // ============================================================================
 
-const SseEventSchema = z.object({
-  message: z.string(),
-  count: z.number().int(),
-});
+// Planet operation types
+const PlanetOperationSchema = z.enum([
+  "created",
+  "updated",
+  "deleted",
+  "listed",
+]);
 
-type SseEvent = z.infer<typeof SseEventSchema>;
+// System status types
+const SystemStatusSchema = z.enum(["healthy", "warning", "error"]);
+
+// Discriminated union for all app events
+const AppEventSchema = z.discriminatedUnion("type", [
+  // Stream events
+  z.object({
+    type: z.literal("stream"),
+    data: z.object({
+      message: z.string(),
+      count: z.number().int(),
+    }),
+  }),
+
+  // Planet CRUD events
+  z.object({
+    type: z.literal("planet"),
+    data: z.object({
+      operation: PlanetOperationSchema,
+      planet_id: z.number().int().optional(),
+      planet_name: z.string().optional(),
+      timestamp: z.number().int(),
+    }),
+  }),
+
+  // System/health events
+  z.object({
+    type: z.literal("system"),
+    data: z.object({
+      status: SystemStatusSchema,
+      message: z.string(),
+    }),
+  }),
+]);
+
+export type AppEvent = z.infer<typeof AppEventSchema>;
+
+// Helper type extractors for type-safe event handling
+export type StreamEvent = Extract<AppEvent, { type: "stream" }>;
+export type PlanetEvent = Extract<AppEvent, { type: "planet" }>;
+export type SystemEvent = Extract<AppEvent, { type: "system" }>;
 
 // ============================================================================
 // Domain Types - Ping
@@ -111,12 +154,12 @@ export const contract = {
         }),
       )
       .input(z.void())
-      .output(asyncIteratorObject(SseEventSchema)),
+      .output(asyncIteratorObject(AppEventSchema)),
     streamEventsChannel: oc
       .meta(tauri.command("stream_events_channel"))
       .meta(tauri.transport({ kind: "channel", id: camelCase("on_event") }))
       .input(z.void())
-      .output(asyncIteratorObject(SseEventSchema)),
+      .output(asyncIteratorObject(AppEventSchema)),
   },
   file: {
     uploadFile: oc

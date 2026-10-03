@@ -1,16 +1,8 @@
-use crate::broadcast::SseBroadcaster;
-use serde::{Deserialize, Serialize};
+use crate::broadcast::{AppBroadcaster, AppEvent};
 use tauri::State;
 
-/// Stream event data payload
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct EventData {
-    pub message: String,
-    pub count: i32,
-}
-
 #[tauri::command]
-pub async fn stream_events(broadcaster: State<'_, SseBroadcaster>) -> Result<(), String> {
+pub async fn stream_events(broadcaster: State<'_, AppBroadcaster>) -> Result<(), String> {
     log::info!("Stream events command invoked (global event mode)");
 
     // Clone broadcaster for async task
@@ -29,17 +21,14 @@ pub async fn stream_events(broadcaster: State<'_, SseBroadcaster>) -> Result<(),
         // Small delay to ensure frontend is ready
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        // 2. EVENTS: Stream actual data events (Axum-style with id and retry)
+        // 2. EVENTS: Stream actual data events
         for i in 1..=5 {
-            let payload = EventData {
-                message: format!("Event {} (global)", i),
-                count: i,
-            };
+            let message = format!("Event {} (global)", i);
+            log::info!("Emitting stream event {}: {}", i, message);
 
-            log::info!("Emitting event {}: {:?}", i, payload);
-
-            // Emit event with metadata (event type: "message", retry: 5s)
-            if let Err(e) = broadcaster.emit_event(payload, i.to_string()) {
+            // Create and emit typed stream event
+            let event = AppEvent::Stream { message, count: i };
+            if let Err(e) = broadcaster.emit_event(event, i.to_string()) {
                 log::error!("Failed to emit event {}: {:?}", i, e);
                 let _ = broadcaster.emit_error("Failed to emit event");
                 return;
