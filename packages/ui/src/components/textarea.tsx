@@ -1,4 +1,4 @@
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 import * as React from "react";
 
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {

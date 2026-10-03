@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Card } from "@tauri-orpc-contract/ui/components/card";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { Card } from "@orpc-tauri/ui/components/card";
 import { Activity, Database, BarChart3, Radio, Zap } from "lucide-react";
 import { orpc } from "@/rpc";
 import { CodeBlock } from "@/components/code-block";

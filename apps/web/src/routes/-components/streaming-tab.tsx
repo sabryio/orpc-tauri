@@ -1,12 +1,12 @@
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Card } from "@tauri-orpc-contract/ui/components/card";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { Card } from "@orpc-tauri/ui/components/card";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@tauri-orpc-contract/ui/components/tabs";
-import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
+} from "@orpc-tauri/ui/components/tabs";
+import { ScrollArea } from "@orpc-tauri/ui/components/scroll-area";
 import { Play, X } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";

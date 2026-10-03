@@ -1,5 +1,5 @@
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 import { UploadIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { createContext, useContext } from "react";

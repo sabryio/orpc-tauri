@@ -1,7 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 

@@ -2,8 +2,17 @@
   "name": "@sabryio/orpc-tauri",
   "version": "0.1.0",
   "exports": {
-    ".": "./src/index.ts",
-    "./link": "./src/link.export.ts",
-    "./meta": "./src/meta.export.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./link": {
+      "types": "./dist/link.export.d.ts",
+      "default": "./dist/link.export.js"
+    },
+    "./meta": {
+      "types": "./dist/meta.export.d.ts",
+      "default": "./dist/meta.export.js"
+    }
   }
 }

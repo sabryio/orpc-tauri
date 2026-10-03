@@ -3,17 +3,17 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Card } from "@tauri-orpc-contract/ui/components/card";
-import { Input } from "@tauri-orpc-contract/ui/components/input";
-import { Label } from "@tauri-orpc-contract/ui/components/label";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { Card } from "@orpc-tauri/ui/components/card";
+import { Input } from "@orpc-tauri/ui/components/input";
+import { Label } from "@orpc-tauri/ui/components/label";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@tauri-orpc-contract/ui/components/tabs";
-import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
+} from "@orpc-tauri/ui/components/tabs";
+import { ScrollArea } from "@orpc-tauri/ui/components/scroll-area";
 import { Database, Plus, Globe, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";

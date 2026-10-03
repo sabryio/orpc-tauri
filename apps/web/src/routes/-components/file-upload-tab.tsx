@@ -1,6 +1,6 @@
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Card } from "@tauri-orpc-contract/ui/components/card";
-import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { Card } from "@orpc-tauri/ui/components/card";
+import { ScrollArea } from "@orpc-tauri/ui/components/scroll-area";
 import { Upload, FileCheck, X } from "lucide-react";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";

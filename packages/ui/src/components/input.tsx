@@ -1,5 +1,5 @@
 import { Input as InputPrimitive } from "@base-ui/react/input";
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 import * as React from "react";
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {

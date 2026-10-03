@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { HeadContent, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { Toaster } from "@tauri-orpc-contract/ui/components/sonner";
+import { Toaster } from "@orpc-tauri/ui/components/sonner";
 
 import { ThemeProvider } from "@/components/theme-provider";
 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Button } from "@tauri-orpc-contract/ui/components/button";
+import { Button } from "@orpc-tauri/ui/components/button";
 import { useState } from "react";
 import {
   Activity,

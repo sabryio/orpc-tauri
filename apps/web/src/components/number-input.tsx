@@ -1,5 +1,5 @@
-import { Input } from "@tauri-orpc-contract/ui/components/input";
-import { Label } from "@tauri-orpc-contract/ui/components/label";
+import { Input } from "@orpc-tauri/ui/components/input";
+import { Label } from "@orpc-tauri/ui/components/label";
 
 interface NumberInputProps {
   id: string;

@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-orpc-contract/ui",
+  "name": "@orpc-tauri/ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@tauri-orpc-contract/config": "workspace:*",
+    "@orpc-tauri/config": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "tailwindcss": "catalog:",

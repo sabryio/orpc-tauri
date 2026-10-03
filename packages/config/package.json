@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-orpc-contract/config",
+  "name": "@orpc-tauri/config",
   "version": "0.0.0",
   "private": true
 }

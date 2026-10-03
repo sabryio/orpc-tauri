@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Card } from "@tauri-orpc-contract/ui/components/card";
-import { ScrollArea } from "@tauri-orpc-contract/ui/components/scroll-area";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { Card } from "@orpc-tauri/ui/components/card";
+import { ScrollArea } from "@orpc-tauri/ui/components/scroll-area";
 import { Code, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 
 interface CodeBlockProps {

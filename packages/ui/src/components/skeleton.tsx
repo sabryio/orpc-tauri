@@ -1,4 +1,4 @@
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (

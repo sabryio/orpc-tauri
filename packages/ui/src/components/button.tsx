@@ -1,5 +1,5 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 const buttonVariants = cva(

@@ -1,9 +1,9 @@
 "use client";
 
-import { Button } from "@tauri-orpc-contract/ui/components/button";
-import { Input } from "@tauri-orpc-contract/ui/components/input";
-import { Textarea } from "@tauri-orpc-contract/ui/components/textarea";
-import { cn } from "@tauri-orpc-contract/ui/lib/utils";
+import { Button } from "@orpc-tauri/ui/components/button";
+import { Input } from "@orpc-tauri/ui/components/input";
+import { Textarea } from "@orpc-tauri/ui/components/textarea";
+import { cn } from "@orpc-tauri/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
 

@@ -1,5 +1,5 @@
 {
-  "name": "tauri-orpc-contract",
+  "name": "orpc-tauri",
   "private": true,
   "workspaces": {
     "packages": [
@@ -8,7 +8,7 @@
     ],
     "catalog": {
       "zod": "^4.5.4",
-      "typescript": "^6.0.3",
+      "typescript": "^7",
       "@types/node": "^26.4.1",
       "varlock": "1.18.0",
       "lucide-react": "^1.41.0",
@@ -28,18 +28,20 @@
     "dev:web": "turbo run dev -F web --",
     "env:generate": "varlock codegen --path ./apps/web/",
     "postinstall": "varlock codegen --path ./apps/web/",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "prepare": "effect-tsgo patch --typescript --no-oxlint"
   },
   "dependencies": {
     "zod": "catalog:"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
-    "@tauri-orpc-contract/config": "workspace:*",
+    "@orpc-tauri/config": "workspace:*",
     "@types/node": "catalog:",
     "turbo": "^2.10.12",
-    "typescript": "catalog:",
-    "varlock": "catalog:"
+    "typescript": "7.0.2",
+    "varlock": "catalog:",
+    "@effect/tsgo": "0.48.0"
   },
   "packageManager": "bun@1.4.2"
 }
