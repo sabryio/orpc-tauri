@@ -1,4 +1,3 @@
-import { ORPCError } from "@orpc/client";
 import { Effect } from "effect";
 import { EffectTauriLink } from "./link";
 import { toORPCError } from "./error-converter";
@@ -6,13 +5,14 @@ import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
 import { ConsoleLogger } from "./logger";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+import { AbortError } from "./errors";
 import type { ContractValidationError } from "./errors";
 import type {
-	Contract,
-	CallOptions,
-	TauriLinkOptions,
-	Logger,
-	TauriTransportConfig,
+  Contract,
+  CallOptions,
+  TauriLinkOptions,
+  Logger,
+  TauriTransportConfig,
 } from "./types";
 import type { StreamConfig } from "./link";
 import type { EventNameStrategy } from "./streaming/event-name-strategy";
@@ -24,144 +24,169 @@ import type { EventNameStrategy } from "./streaming/event-name-strategy";
  * Or use `TauriLink.make()` factory for Effect-based construction with typed errors.
  */
 export class TauriLink<TContext = unknown> {
-	private readonly resolver: ProcedureResolver;
-	private readonly logger: Logger;
-	private readonly eventNameStrategy: EventNameStrategy;
+  private readonly resolver: ProcedureResolver;
+  private readonly logger: Logger;
+  private readonly eventNameStrategy: EventNameStrategy;
 
-	constructor(
-		contract: Contract,
-		options?: TauriLinkOptions,
-	) {
-		this.logger = options?.logger ?? new ConsoleLogger();
-		this.eventNameStrategy =
-			options?.eventNameStrategy ?? new DefaultEventNameStrategy();
-		this.resolver = new ProcedureResolver(contract);
+  constructor(contract: Contract, options?: TauriLinkOptions) {
+    this.logger = options?.logger ?? new ConsoleLogger();
+    this.eventNameStrategy =
+      options?.eventNameStrategy ?? new DefaultEventNameStrategy();
+    this.resolver = new ProcedureResolver(contract);
 
-		// Run validation synchronously
-		Effect.runSync(validateContract(contract));
-	}
+    // Run validation synchronously
+    Effect.runSync(validateContract(contract));
+  }
 
-	/**
-	 * Effect-based factory with typed errors.
-	 *
-	 * Recommended for applications using Effect throughout.
-	 */
-	static make<TContext = unknown>(
-		contract: Contract,
-		options?: TauriLinkOptions,
-	): Effect.Effect<TauriLink<TContext>, ContractValidationError> {
-		return Effect.gen(function* () {
-			yield* validateContract(contract);
-			// Create via constructor but catch validation error since already validated
-			try {
-				return new TauriLink<TContext>(contract, options);
-			} catch {
-				// Should never happen since we already validated
-				return new TauriLink<TContext>(contract, options);
-			}
-		});
-	}
+  /**
+   * Effect-based factory with typed errors.
+   *
+   * Recommended for applications using Effect throughout.
+   */
+  static make<TContext = unknown>(
+    contract: Contract,
+    options?: TauriLinkOptions,
+  ): Effect.Effect<TauriLink<TContext>, ContractValidationError> {
+    return Effect.gen(function* () {
+      yield* validateContract(contract);
+      // Create via constructor but catch validation error since already validated
+      try {
+        return new TauriLink<TContext>(contract, options);
+      } catch {
+        // Should never happen since we already validated
+        return new TauriLink<TContext>(contract, options);
+      }
+    });
+  }
 
-	async call<TInput, TOutput>(
-		path: string[],
-		input: TInput,
-		callOptions?: CallOptions<TContext>,
-	): Promise<TOutput> {
-		// Extract command name using Effect
-		const commandNameEffect = this.resolver.extractCommandName(path);
-		const commandName = await Effect.runPromise(commandNameEffect);
+  /**
+   * Execute a call using Effect internally.
+   *
+   * This is the Effect-native implementation. The public `call()` method
+   * wraps this with Promise conversion and error mapping.
+   */
+  private callEffect<TInput, TOutput>(
+    path: string[],
+    input: TInput,
+    callOptions?: CallOptions<TContext>,
+  ): Effect.Effect<TOutput, unknown, never> {
+    const self = this;
+    return Effect.gen(function* () {
+      // Extract command name
+      const commandName = yield* self.resolver.extractCommandName(path);
+      const debug = self.resolver.getDebug(path);
 
-		const debug = this.resolver.getDebug(path);
+      if (debug) {
+        yield* Effect.sync(() =>
+          self.logger.log(`[TauriLink] ${commandName}`, {
+            input,
+            path: path.join("."),
+          }),
+        );
+      }
 
-		if (debug) {
-			this.logger.log(`[TauriLink] ${commandName}`, {
-				input,
-				path: path.join("."),
-			});
-		}
+      // Check abort signal
+      if (callOptions?.signal?.aborted) {
+        yield* new AbortError({ reason: "Request aborted" });
+      }
 
-		if (callOptions?.signal?.aborted) {
-			throw new ORPCError<"INTERNAL_ERROR", unknown>("INTERNAL_ERROR", {
-				message: "Request aborted",
-			});
-		}
+      // Handle streaming vs unary
+      if (self.resolver.isStreaming(path)) {
+        const transport = self.resolver.getTransport(path);
+        const transportConfig = self.resolver.getTransportConfig(path);
 
-		try {
-			if (this.resolver.isStreaming(path)) {
-				const transport = this.resolver.getTransport(path);
-				const transportConfig = this.resolver.getTransportConfig(path);
+        if (transport === "channel") {
+          return self.createChannelStream<TOutput>(
+            commandName,
+            input,
+            transportConfig,
+          ) as TOutput;
+        }
 
-				if (transport === "channel") {
-					return this.createChannelStream<TOutput>(
-						commandName,
-						input,
-						transportConfig,
-					) as TOutput;
-				}
+        return self.createEventStream<TOutput>(commandName, input) as TOutput;
+      }
 
-				return this.createEventStream<TOutput>(commandName, input) as TOutput;
-			}
+      // Unary call
+      const args =
+        input === undefined ? {} : { input: input === null ? null : input };
+      const effect = EffectTauriLink.call<Record<string, unknown>, TOutput>(
+        commandName,
+        args,
+      );
+      const result = yield* effect.pipe(
+        Effect.provide(EffectTauriLink.AppLayer),
+      );
 
-			// Unary call - run Effect and convert to Promise
-			const args =
-				input === undefined ? {} : { input: input === null ? null : input };
-			const effect = EffectTauriLink.call<
-				Record<string, unknown>,
-				TOutput
-			>(commandName, args);
-			const result = await Effect.runPromise(
-				effect.pipe(Effect.provide(EffectTauriLink.AppLayer)),
-			);
+      if (debug) {
+        yield* Effect.sync(() =>
+          self.logger.log(`[TauriLink] ${commandName} →`, result),
+        );
+      }
 
-			if (debug) {
-				this.logger.log(`[TauriLink] ${commandName} →`, result);
-			}
+      return result;
+    });
+  }
 
-			return result;
-		} catch (error) {
-			if (debug) {
-				this.logger.error(`[TauriLink] ${commandName} ✗`, error);
-			}
-			throw toORPCError(error);
-		}
-	}
+  async call<TInput, TOutput>(
+    path: string[],
+    input: TInput,
+    callOptions?: CallOptions<TContext>,
+  ): Promise<TOutput> {
+    const debug = this.resolver.getDebug(path);
 
-	private createEventStream<TOutput>(
-		commandName: string,
-		input: unknown,
-	): AsyncIterableIterator<TOutput> {
-		const streamId = crypto.randomUUID();
-		const eventNames = this.eventNameStrategy.getEventNames(streamId);
+    return Effect.runPromise(
+      this.callEffect<TInput, TOutput>(path, input, callOptions).pipe(
+        Effect.catch((error) => {
+          if (debug) {
+            return Effect.sync(() => {
+              this.logger.error(`[TauriLink] call error`, error);
+              throw toORPCError(error);
+            });
+          }
+          return Effect.sync(() => {
+            throw toORPCError(error);
+          });
+        }),
+      ),
+    );
+  }
 
-		const config: StreamConfig = {
-			mode: "event",
-			eventConfig: {
-				streamId: () => streamId,
-				getEventNames: () => eventNames,
-			},
-		};
+  private createEventStream<TOutput>(
+    commandName: string,
+    input: unknown,
+  ): AsyncIterableIterator<TOutput> {
+    const streamId = crypto.randomUUID();
+    const eventNames = this.eventNameStrategy.getEventNames(streamId);
 
-		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
-	}
+    const config: StreamConfig = {
+      mode: "event",
+      eventConfig: {
+        streamId: () => streamId,
+        getEventNames: () => eventNames,
+      },
+    };
 
-	private createChannelStream<TOutput>(
-		commandName: string,
-		input: unknown,
-		transportConfig: TauriTransportConfig | undefined,
-	): AsyncIterableIterator<TOutput> {
-		let channelParam = "channel";
-		if (transportConfig?.kind === "channel") {
-			channelParam =
-				typeof transportConfig.id === "string"
-					? transportConfig.id
-					: transportConfig.id.name;
-		}
+    return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
+  }
 
-		const config: StreamConfig = {
-			mode: "channel",
-			channelParam,
-		};
+  private createChannelStream<TOutput>(
+    commandName: string,
+    input: unknown,
+    transportConfig: TauriTransportConfig | undefined,
+  ): AsyncIterableIterator<TOutput> {
+    let channelParam = "channel";
+    if (transportConfig?.kind === "channel") {
+      channelParam =
+        typeof transportConfig.id === "string"
+          ? transportConfig.id
+          : transportConfig.id.name;
+    }
 
-		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
-	}
+    const config: StreamConfig = {
+      mode: "channel",
+      channelParam,
+    };
+
+    return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
+  }
 }
