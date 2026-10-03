@@ -27,20 +27,33 @@ import { asyncIteratorObject } from "@orpc/contract";
 import { tauri } from "@tauri-orpc-contract/tauri-link";
 
 export const contract = {
-  // Event-based streaming (default)
+  // Event-based streaming
   stream: {
     events: oc
-      .meta(openapi({ method: "GET", path: "/stream_events" }))
-      .meta(tauri({ transport: "emit-listen" }))
+      .meta(tauri.command("stream_events"))
+      .meta(
+        tauri.transport({
+          kind: "stream",
+          id: { name: "streamId", value: () => crypto.randomUUID() },
+          events: {
+            name: "eventNames",
+            generator: (streamId) => ({
+              data: `stream:${streamId}:data`,
+              done: `stream:${streamId}:done`,
+              error: `stream:${streamId}:error`,
+            }),
+          },
+        })
+      )
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
   },
   
-  // Channel-based streaming (Tauri native)
+  // Channel-based streaming
   channel: {
     events: oc
-      .meta(openapi({ method: "GET", path: "/channel_events" }))
-      .meta(tauri({ transport: "channel" }))
+      .meta(tauri.command("channel_events"))
+      .meta(tauri.transport({ kind: "channel", id: "onEvent" }))
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
   },
@@ -82,11 +95,9 @@ The `tauri()` metadata plugin supports the following options:
 ```typescript
 interface TauriMeta {
   /**
-   * Transport mechanism for streaming procedures
-   * - "emit-listen": Event-based streaming with stream IDs (default)
-   * - "channel": Bidirectional Channel API streaming
+   * Transport configuration for streaming procedures
    */
-  transport?: "emit-listen" | "channel";
+  transport?: TauriTransportConfig;
 
   /**
    * Custom Tauri command name override
@@ -113,6 +124,21 @@ interface TauriMeta {
    */
   permissions?: string[];
 }
+
+type TauriTransportConfig =
+  | {
+      kind: "stream";
+      id: { name: string; value: string | (() => string) };
+      events: {
+        name: string;
+        generator: (streamId: string) => {
+          data: string;
+          done: string;
+          error: string;
+        };
+      };
+    }
+  | { kind: "channel"; id: { name: string } | string };
 ```
 
 ### Metadata Merging
@@ -135,23 +161,36 @@ oc
 
 **Rust Backend:**
 ```rust
-use uuid::Uuid;
 use tauri::{AppHandle, Emitter};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventNames {
+    pub data: String,
+    pub done: String,
+    pub error: String,
+}
+
+#[derive(Serialize)]
+pub struct StreamEventData {
+    pub message: String,
+    pub count: i32,
+}
 
 #[tauri::command]
-pub async fn stream_events(app: AppHandle) -> StreamStartResponse {
-    let stream_id = Uuid::new_v4().to_string();
-    
+pub async fn stream_events(app: AppHandle, stream_id: String, event_names: EventNames) {
     tauri::async_runtime::spawn(async move {
         for i in 1..=5 {
-            let event = StreamEvent { message: format!("Event {}", i), count: i };
-            let _ = app.emit(&format!("stream:{}:data", stream_id), &event);
+            let event = StreamEventData { 
+                message: format!("Event {}", i), 
+                count: i 
+            };
+            let _ = app.emit(&event_names.data, &event);
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
-        let _ = app.emit(&format!("stream:{}:done", stream_id), ());
+        let _ = app.emit(&event_names.done, ());
     });
-    
-    StreamStartResponse { stream_id }
 }
 ```
 
@@ -170,25 +209,26 @@ for await (const event of iterator) {
 use tauri::ipc::Channel;
 
 #[derive(Serialize)]
-#[serde(tag = "event", content = "data")]
-enum StreamEvent {
-    #[serde(rename = "data")]
-    Data { message: String, count: i32 },
-    #[serde(rename = "done")]
-    Done,
+pub struct StreamChannelData {
+    pub message: String,
+    pub count: i32,
 }
 
 #[tauri::command]
-pub async fn channel_events(on_event: Channel<StreamEvent>) {
+pub async fn stream_events_channel(on_event: Channel<Event<StreamChannelData>>) {
     tauri::async_runtime::spawn(async move {
         for i in 1..=5 {
-            let _ = on_event.send(StreamEvent::Data { 
+            let payload = StreamChannelData { 
                 message: format!("Event {}", i), 
                 count: i 
-            });
+            };
+            let event = Event::default()
+                .event("message")
+                .data(payload);
+            let _ = on_event.send(event);
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
-        let _ = on_event.send(StreamEvent::Done);
+        let _ = on_event.send(Event::default().event("close"));
     });
 }
 ```
