@@ -1,0 +1,10 @@
+src/
+.fallow/
+.temp/
+*.test.ts
+*.spec.ts
+tsconfig.json
+tsconfig.build.json
+vitest.config.ts
+CLAUDE.md
+AGENTS.md

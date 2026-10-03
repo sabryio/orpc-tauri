@@ -1,4 +1,4 @@
-# @tauri-orpc-contract/tauri-link
+# orpc-tauri
 
 Type-safe oRPC link for Tauri applications with support for both event-based and channel-based streaming.
 
@@ -7,13 +7,18 @@ Type-safe oRPC link for Tauri applications with support for both event-based and
 - 🔗 **oRPC Integration**: Seamless integration with oRPC contracts
 - 📡 **Dual Streaming**: Support for both Tauri event-based and Channel API streaming
 - 🎯 **Type-Safe**: Full TypeScript support with inferred types
-- 🏗️ **Clean Architecture**: SOLID principles, modular design
-- 🔍 **Metadata-Driven**: Uses `@tauri` metadata to configure transport behavior
+- 🏗️ **Clean Architecture**: SOLID principles with Effect TypeScript internals
+- 🔍 **Metadata-Driven**: Uses `tauri()` metadata to configure transport behavior
+- ⚡ **Resource Safe**: Automatic cleanup via Effect.Scope
 
 ## Installation
 
 ```bash
-bun add @tauri-orpc-contract/tauri-link
+npm install orpc-tauri
+# or
+bun add orpc-tauri
+# or
+pnpm add orpc-tauri
 ```
 
 ## Quick Start
@@ -22,9 +27,8 @@ bun add @tauri-orpc-contract/tauri-link
 
 ```typescript
 import { oc } from "@orpc/contract";
-import { openapi } from "@orpc/openapi";
 import { asyncIteratorObject } from "@orpc/contract";
-import { tauri } from "@tauri-orpc-contract/tauri-link";
+import { tauri } from "orpc-tauri/meta";
 
 export const contract = {
   // Event-based streaming
@@ -64,7 +68,7 @@ export const contract = {
 
 ```typescript
 import { createORPCClient } from "@orpc/client";
-import { TauriLink } from "@tauri-orpc-contract/tauri-link";
+import { TauriLink } from "orpc-tauri/link";
 import { contract } from "./contract";
 
 const link = new TauriLink(contract);
@@ -241,25 +245,45 @@ for await (const event of iterator) {
 }
 ```
 
-## Architecture
+## API
 
+### Exports
+
+```typescript
+// Meta utilities
+import { tauri } from "orpc-tauri/meta";
+
+// Link implementation
+import { 
+  TauriLink,
+  ConsoleLogger,
+  NoopLogger,
+  DefaultEventNameStrategy 
+} from "orpc-tauri/link";
+
+// Types
+import type { 
+  TauriLinkOptions,
+  SimpleLogger,
+  EventNameStrategy 
+} from "orpc-tauri/link";
 ```
-packages/tauri-link/
-├── src/
-│   ├── errors/
-│   │   └── error-handler.ts      # Error conversion logic
-│   ├── resolvers/
-│   │   ├── contract-validator.ts # Contract validation
-│   │   └── procedure-resolver.ts # Metadata extraction
-│   ├── streaming/
-│   │   ├── stream-iterator.ts    # Async queue management
-│   │   ├── event-stream.ts       # Event-based streaming
-│   │   └── channel-stream.ts     # Channel-based streaming
-│   ├── link.ts                   # Main TauriLink class
-│   ├── metadata.ts               # Tauri metadata plugin
-│   ├── types.ts                  # Type definitions
-│   └── index.ts                  # Public exports
+
+### TauriLink Options
+
+```typescript
+const link = new TauriLink(contract, {
+  logger: new ConsoleLogger(), // or NoopLogger()
+  eventNameStrategy: new DefaultEventNameStrategy(),
+});
 ```
+
+## Implementation Details
+
+- **Effect TypeScript internals**: Resource-safe streaming with automatic cleanup
+- **Promise-based public API**: No Effect exposure to end users
+- **Typed error channels**: Internal errors converted to ORPCError at boundary
+- **Service injection**: Testable architecture with dependency injection
 
 ## License
 
