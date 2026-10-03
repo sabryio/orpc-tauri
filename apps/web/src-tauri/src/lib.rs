@@ -25,6 +25,7 @@ pub fn run() {
             commands::planet::list_planets_paginated,
             commands::stream::stream_events,
             commands::channel_stream::stream_events_channel,
+            commands::file::upload_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

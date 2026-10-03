@@ -31,6 +31,7 @@
     "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-dropzone": "^20.1.2",
     "sonner": "catalog:",
     "varlock": "catalog:",
     "zod": "catalog:"

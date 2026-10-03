@@ -124,6 +124,25 @@ export const contract = {
       .input(z.void())
       .output(asyncIteratorObject(SseEventSchema)),
   },
+  file: {
+    uploadFile: oc
+      .meta(tauri.command("upload_file"))
+      .input(
+        z.object({
+          content: z.string(), // Base64 encoded
+          filename: z.string(),
+        }),
+      )
+      .output(
+        z.object({
+          success: z.boolean(),
+          size: z.number().int(),
+          filename: z.string(),
+          mime_type: z.string().optional(),
+        }),
+      )
+      .errors(StandardApiErrors),
+  },
 } as const;
 
 export type Contract = typeof contract;

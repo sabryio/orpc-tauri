@@ -9,6 +9,7 @@ import {
   Zap,
   Terminal,
   BarChart3,
+  Upload,
 } from "lucide-react";
 
 import { orpc } from "@/rpc";
@@ -16,6 +17,7 @@ import { OverviewTab } from "./-components/overview-tab";
 import { DataLayerTab } from "./-components/data-layer-tab";
 import { StreamingTab } from "./-components/streaming-tab";
 import { AdvancedTab } from "./-components/advanced-tab";
+import { FileUploadTab } from "./-components/file-upload-tab";
 import { TitleBar } from "@/components/title-bar";
 
 export const Route = createFileRoute("/")({
@@ -90,6 +92,18 @@ function HomeComponent() {
               <BarChart3 className="h-4 w-4" />
               Advanced
             </button>
+
+            <button
+              onClick={() => setActiveTab("files")}
+              className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded transition-all ${
+                activeTab === "files"
+                  ? "bg-primary/20 text-primary border border-primary/50 glow"
+                  : "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+              }`}
+            >
+              <Upload className="h-4 w-4" />
+              File Upload
+            </button>
           </nav>
 
           <div className="pt-4 border-t border-primary/30 space-y-2">
@@ -116,6 +130,7 @@ function HomeComponent() {
                 {activeTab === "data" && "Data Layer Tests"}
                 {activeTab === "streaming" && "Stream Transport Tests"}
                 {activeTab === "advanced" && "Advanced Patterns"}
+                {activeTab === "files" && "File Upload"}
               </h2>
               <p className="text-xs text-muted-foreground">
                 Testing TauriLink with Tauri IPC
@@ -139,6 +154,7 @@ function HomeComponent() {
             {activeTab === "data" && <DataLayerTab />}
             {activeTab === "streaming" && <StreamingTab />}
             {activeTab === "advanced" && <AdvancedTab />}
+            {activeTab === "files" && <FileUploadTab />}
           </main>
         </div>
       </div>
