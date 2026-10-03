@@ -1,0 +1,9 @@
+{
+  "name": "@sabryio/orpc-tauri",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./link": "./src/link.export.ts",
+    "./meta": "./src/meta.export.ts"
+  }
+}
