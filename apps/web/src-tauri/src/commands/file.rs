@@ -1,10 +1,9 @@
 use crate::types::errors::AppError;
-use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct UploadFileInput {
-    pub content: String, // Base64 encoded
+    pub content: Vec<u8>, // Raw bytes from Uint8Array
     pub filename: String,
 }
 
@@ -18,12 +17,8 @@ pub struct UploadFileOutput {
 
 #[tauri::command]
 pub async fn upload_file(input: UploadFileInput) -> Result<UploadFileOutput, AppError> {
-    // Decode base64 content
-    let decoded = general_purpose::STANDARD
-        .decode(&input.content)
-        .map_err(|e| AppError::Internal {
-            msg: format!("Failed to decode base64: {}", e),
-        })?;
+    // No need to decode - already have raw bytes!
+    let size = input.content.len();
 
     // Detect MIME type from filename extension
     let mime_type = match input.filename.split('.').next_back() {
@@ -39,13 +34,13 @@ pub async fn upload_file(input: UploadFileInput) -> Result<UploadFileOutput, App
     log::info!(
         "Processed file upload: {} ({} bytes, type: {:?})",
         input.filename,
-        decoded.len(),
+        size,
         mime_type
     );
 
     Ok(UploadFileOutput {
         success: true,
-        size: decoded.len(),
+        size,
         filename: input.filename,
         mime_type,
     })

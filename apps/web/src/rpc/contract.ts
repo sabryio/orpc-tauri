@@ -129,7 +129,7 @@ export const contract = {
       .meta(tauri.command("upload_file"))
       .input(
         z.object({
-          content: z.string(), // Base64 encoded
+          content: z.instanceof(Uint8Array), // Raw bytes
           filename: z.string(),
         }),
       )

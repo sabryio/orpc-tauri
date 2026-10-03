@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::time::Duration;
 
 /// Server-Sent Event builder, matching Axum's SSE Event pattern.
-/// 
+///
 /// This allows seamless migration from Tauri to Axum by using the same API:
 /// ```rust
 /// Event::default()
@@ -16,19 +16,19 @@ pub struct Event<T = ()> {
     /// Optional event name (maps to `event:` field in SSE)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub event: Option<String>,
-    
+
     /// Optional event ID (maps to `id:` field in SSE)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    
+
     /// Optional retry duration in milliseconds (maps to `retry:` field in SSE)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry: Option<u64>,
-    
+
     /// Optional comment (maps to `:` field in SSE)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
-    
+
     /// Event data payload (maps to `data:` field in SSE)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
@@ -51,64 +51,46 @@ impl<T> Event<T> {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Set the event name field (`event:<event-name>`)
-    /// 
+    ///
     /// This corresponds to the `type` parameter in `addEventListener` on an EventSource.
     /// For example, `.event("update")` corresponds to `.addEventListener("update", ...)`.
     pub fn event<S: Into<String>>(mut self, event: S) -> Self {
         self.event = Some(event.into());
         self
     }
-    
+
     /// Set the event's identifier field (`id:<identifier>`)
-    /// 
+    ///
     /// This corresponds to MessageEvent's `lastEventId` field.
     pub fn id<S: Into<String>>(mut self, id: S) -> Self {
         self.id = Some(id.into());
         self
     }
-    
+
     /// Set the event's retry timeout field (`retry: <timeout>`)
-    /// 
+    ///
     /// This sets how long clients will wait before reconnecting if disconnected.
     pub fn retry(mut self, duration: Duration) -> Self {
         self.retry = Some(duration.as_millis() as u64);
         self
     }
-    
+
     /// Set the event's comment field (`:<comment-text>`)
-    /// 
+    ///
     /// This field is ignored by most SSE clients but useful for keep-alive.
     pub fn comment<S: Into<String>>(mut self, comment: S) -> Self {
         self.comment = Some(comment.into());
         self
     }
-    
+
     /// Set the event's data field (`data: <content>`)
-    /// 
+    ///
     /// This corresponds to MessageEvent's data field.
     pub fn data(mut self, data: T) -> Self {
         self.data = Some(data);
         self
-    }
-}
-
-// Convenience constructors for common event types
-impl<T> Event<T> {
-    /// Create a keep-alive comment event (like Axum's DEFAULT_KEEP_ALIVE)
-    pub fn keep_alive() -> Event<()> {
-        Event::default().comment("")
-    }
-    
-    /// Create a close/done event
-    pub fn close() -> Event<()> {
-        Event::default().event("close")
-    }
-    
-    /// Create a flush event to establish stream
-    pub fn flush() -> Event<()> {
-        Event::default().comment("flush")
     }
 }
 
@@ -124,22 +106,10 @@ mod tests {
             .id("123")
             .retry(Duration::from_secs(5))
             .data(json!({"msg": "hello"}));
-        
+
         assert_eq!(event.event, Some("message".to_string()));
         assert_eq!(event.id, Some("123".to_string()));
         assert_eq!(event.retry, Some(5000));
         assert!(event.data.is_some());
-    }
-    
-    #[test]
-    fn test_convenience_constructors() {
-        let keep_alive = Event::<()>::keep_alive();
-        assert_eq!(keep_alive.comment, Some("".to_string()));
-        
-        let close = Event::<()>::close();
-        assert_eq!(close.event, Some("close".to_string()));
-        
-        let flush = Event::<()>::flush();
-        assert_eq!(flush.comment, Some("flush".to_string()));
     }
 }

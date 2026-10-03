@@ -43,11 +43,12 @@ export function FileUploadTab() {
   const handleUpload = async () => {
     for (const file of selectedFiles) {
       try {
-        // Convert file to base64
-        const base64Content = await fileToBase64(file);
+        // Convert File to Uint8Array (no base64 needed!)
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
 
         const result = await uploadFileMutation.mutateAsync({
-          content: base64Content,
+          content: uint8Array,
           filename: file.name,
         });
 
@@ -177,21 +178,6 @@ export function FileUploadTab() {
       </Card>
     </div>
   );
-}
-
-// Helper function to convert File to base64
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      // Remove data URL prefix (e.g., "data:image/png;base64,")
-      const base64Data = base64.split(",")[1];
-      resolve(base64Data);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 // Helper function to format bytes
