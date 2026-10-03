@@ -13,6 +13,14 @@ Type-safe oRPC link for Tauri applications with support for both event-based and
 
 ## Installation
 
+**JSR (recommended):**
+```bash
+npx jsr add @sabryio/orpc-tauri
+# or
+deno add jsr:@sabryio/orpc-tauri
+```
+
+**NPM:**
 ```bash
 npm install orpc-tauri
 # or
@@ -28,7 +36,9 @@ pnpm add orpc-tauri
 ```typescript
 import { oc } from "@orpc/contract";
 import { asyncIteratorObject } from "@orpc/contract";
-import { tauri } from "orpc-tauri/meta";
+import { tauri } from "@sabryio/orpc-tauri/meta"; // JSR
+// or
+import { tauri } from "orpc-tauri/meta"; // NPM
 
 export const contract = {
   // Event-based streaming
@@ -68,7 +78,9 @@ export const contract = {
 
 ```typescript
 import { createORPCClient } from "@orpc/client";
-import { TauriLink } from "orpc-tauri/link";
+import { TauriLink } from "@sabryio/orpc-tauri/link"; // JSR
+// or
+import { TauriLink } from "orpc-tauri/link"; // NPM
 import { contract } from "./contract";
 
 const link = new TauriLink(contract);
@@ -249,6 +261,28 @@ for await (const event of iterator) {
 
 ### Exports
 
+**JSR:**
+```typescript
+// Meta utilities
+import { tauri } from "@sabryio/orpc-tauri/meta";
+
+// Link implementation
+import { 
+  TauriLink,
+  ConsoleLogger,
+  NoopLogger,
+  DefaultEventNameStrategy 
+} from "@sabryio/orpc-tauri/link";
+
+// Types
+import type { 
+  TauriLinkOptions,
+  SimpleLogger,
+  EventNameStrategy 
+} from "@sabryio/orpc-tauri/link";
+```
+
+**NPM:**
 ```typescript
 // Meta utilities
 import { tauri } from "orpc-tauri/meta";
