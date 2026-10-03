@@ -1,4 +1,4 @@
-use crate::sse::Event;
+use crate::broadcast::Event;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tauri::ipc::Channel;

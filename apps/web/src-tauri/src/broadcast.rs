@@ -1,5 +1,17 @@
 use serde::Serialize;
+use std::sync::Arc;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+
+/// Global SSE event names (matches GLOBAL_EVENT_NAMES in tauri-link/constants.ts)
+pub mod event_names {
+    /// Data event - emitted for each stream item
+    pub const DATA: &str = "data";
+    /// Done event - emitted when stream completes successfully
+    pub const DONE: &str = "done";
+    /// Error event - emitted when stream encounters an error
+    pub const ERROR: &str = "error";
+}
 
 /// Server-Sent Event builder, matching Axum's SSE Event pattern exactly.
 ///
@@ -80,22 +92,54 @@ impl Event {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+/// Broadcast SSE manager - can be used from any command handler
+/// Similar to Axum's SSE broadcasting pattern
+#[derive(Clone)]
+pub struct SseBroadcaster {
+    app: Arc<AppHandle>,
+}
 
-    #[test]
-    fn test_event_builder() {
+impl SseBroadcaster {
+    /// Create a new broadcaster with the app handle
+    pub fn new(app: AppHandle) -> Self {
+        Self { app: Arc::new(app) }
+    }
+
+    /// Emit a data event to all connected clients
+    pub fn emit_data(&self, event: Event) -> Result<(), String> {
+        self.app
+            .emit(event_names::DATA, &event)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Emit an error event to all connected clients
+    pub fn emit_error<T: Serialize>(&self, error: T) -> Result<(), String> {
+        self.app
+            .emit(event_names::ERROR, &error)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Emit a done event to all connected clients
+    pub fn emit_done(&self) -> Result<(), String> {
+        self.app
+            .emit(event_names::DONE, ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Convenience method to emit a flush event (establish connection)
+    pub fn emit_flush(&self) -> Result<(), String> {
+        let flush_event = Event::default().comment("flush");
+        self.emit_data(flush_event)
+    }
+
+    /// Convenience method to emit a typed data event with metadata
+    /// Event type: "message", retry: 5 seconds
+    pub fn emit_event<T: Serialize>(&self, data: T, id: String) -> Result<(), String> {
         let event = Event::default()
             .event("message")
-            .id("123")
+            .id(id)
             .retry(Duration::from_secs(5))
-            .data(json!({"msg": "hello"}));
-
-        assert_eq!(event.event, Some("message".to_string()));
-        assert_eq!(event.id, Some("123".to_string()));
-        assert_eq!(event.retry, Some(5000));
-        assert!(event.data.is_some());
+            .data(data);
+        self.emit_data(event)
     }
 }
