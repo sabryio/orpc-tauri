@@ -17,45 +17,42 @@ If you need to learn more about particular Effect APIs and concepts that the gui
 ## Architecture
 
 ### Public API (Promise-based)
-- `src/v2/public-api.ts` - TauriLink class, backward compatible API
-- `src/v2/error-converter.ts` - Converts Effect errors to ORPCError at boundary
+- `src/public-api.ts` - TauriLink class, backward compatible API
+- `src/error-converter.ts` - Converts Effect errors to ORPCError at boundary
 - Returns `Promise<T>` for unary calls, `AsyncIterableIterator<T>` for streaming
 
-### Effect Internals (v2/)
-- `src/v2/link.ts` - EffectTauriLink orchestrator, coordinates services and streaming
-- `src/v2/services/` - Injectable Effect services (invoker, listener, channel-factory)
-- `src/v2/streaming/` - Effect.Stream implementations for SSE and channel modes
-- `src/v2/adapters/` - Stream → AsyncIterator conversion
-- `src/v2/errors.ts` - Typed error classes (TauriInvokeError, TauriListenError, StreamError, ValidationError, AbortError)
+### Effect Internals
+- `src/link.ts` - EffectTauriLink orchestrator, coordinates services and streaming
+- `src/services/` - Injectable Effect services (invoker, listener, channel-factory)
+- `src/streaming/` - Effect.Stream implementations (event-stream, channel-stream, stream-adapter, utilities)
+- `src/errors.ts` - Typed error classes (TauriInvokeError, TauriListenError, StreamError, ValidationError, AbortError)
 
-### Shared Utilities (kept from old implementation)
+### Shared Utilities
 - `src/resolvers/contract-validator.ts` - Contract structure validation
 - `src/resolvers/procedure-resolver.ts` - Extract metadata from contract paths
-- `src/streaming/event-name-strategy.ts` - Generate unique event names per stream
-- `src/streaming/sse-types.ts` - SSE event types and metadata utilities
 - `src/metadata.ts` - Tauri metadata builder (tauri.command, tauri.transport)
 - `src/logger.ts` - Logger implementations (ConsoleLogger, NoopLogger)
 - `src/types.ts` - Shared type definitions
 
 ## Key files
 
-| File                                 | Owns                                                    |
-| ------------------------------------ | ------------------------------------------------------- |
-| src/v2/public-api.ts                 | Promise facade over Effect implementation               |
-| src/v2/link.ts                       | Effect-based orchestrator (EffectTauriLink)             |
-| src/v2/services/invoker.ts           | TauriInvoker service (wraps tauri.invoke)               |
-| src/v2/services/listener.ts          | TauriListener service (wraps tauri.listen, auto-cleanup)|
-| src/v2/services/channel-factory.ts   | TauriChannelFactory service (creates Tauri Channels)    |
-| src/v2/streaming/event-stream.ts     | SSE event streaming with Effect.Stream                  |
-| src/v2/streaming/channel-stream.ts   | Tauri channel streaming with Effect.Stream              |
-| src/v2/adapters/stream-adapter.ts    | Convert Effect.Stream to AsyncIterableIterator          |
-| src/v2/errors.ts                     | Typed error classes for internal error handling         |
-| src/v2/error-converter.ts            | Convert Effect errors to ORPCError at boundary          |
-| src/resolvers/contract-validator.ts  | Contract structure validation                           |
-| src/resolvers/procedure-resolver.ts  | Extract metadata from contract paths                    |
-| src/streaming/event-name-strategy.ts | Generate unique event names per stream                  |
-| src/streaming/sse-types.ts           | SSE event structure and metadata attachment             |
-| src/metadata.ts                      | Tauri metadata builder (tauri.command, tauri.transport) |
+| File                              | Owns                                                    |
+| --------------------------------- | ------------------------------------------------------- |
+| src/public-api.ts                 | Promise facade over Effect implementation               |
+| src/link.ts                       | Effect-based orchestrator (EffectTauriLink)             |
+| src/services/invoker.ts           | TauriInvoker service (wraps tauri.invoke)               |
+| src/services/listener.ts          | TauriListener service (wraps tauri.listen, auto-cleanup)|
+| src/services/channel-factory.ts   | TauriChannelFactory service (creates Tauri Channels)    |
+| src/streaming/event-stream.ts     | SSE event streaming with Effect.Stream                  |
+| src/streaming/channel-stream.ts   | Tauri channel streaming with Effect.Stream              |
+| src/streaming/stream-adapter.ts   | Convert Effect.Stream to AsyncIterableIterator          |
+| src/streaming/event-name-strategy.ts | Generate unique event names per stream               |
+| src/streaming/sse-types.ts        | SSE event structure and metadata attachment             |
+| src/errors.ts                     | Typed error classes for internal error handling         |
+| src/error-converter.ts            | Convert Effect errors to ORPCError at boundary          |
+| src/resolvers/contract-validator.ts  | Contract structure validation                        |
+| src/resolvers/procedure-resolver.ts  | Extract metadata from contract paths                 |
+| src/metadata.ts                   | Tauri metadata builder (tauri.command, tauri.transport) |
 
 ## Commands
 

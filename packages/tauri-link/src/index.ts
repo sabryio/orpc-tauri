@@ -1,5 +1,5 @@
-// Export v2 TauriLink (Effect-based implementation with Promise facade)
-export { TauriLink } from "./v2/public-api";
+// Export TauriLink (Effect-based implementation with Promise facade)
+export { TauriLink } from "./public-api";
 
 // Export typed error classes for power users (optional advanced usage)
 export {
@@ -9,7 +9,7 @@ export {
 	ValidationError,
 	AbortError,
 	type CallError,
-} from "./v2/errors";
+} from "./errors";
 
 // Export metadata utilities
 export { tauri, getTauriMeta, extractTauriMeta } from "./metadata";

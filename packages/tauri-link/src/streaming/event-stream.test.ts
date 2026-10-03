@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TauriInvoker } from "../services/invoker";
 import { TauriListener } from "../services/listener";
 import { createEventStream, type EventStreamConfig } from "./event-stream";
-import { EVENT_META_SYMBOL, type SseEvent } from "../../streaming/sse-types";
+import { EVENT_META_SYMBOL, type SseEvent } from "./sse-types";
 
 describe("createEventStream", () => {
 	it("should emit data events from the stream", async () => {

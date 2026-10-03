@@ -1,5 +1,5 @@
 import { Effect, Layer, Stream } from "effect";
-import { streamToAsyncIterator } from "./adapters/stream-adapter";
+import { toAsyncIterator } from "./streaming/stream-adapter";
 import {
 	TauriChannelFactory,
 	TauriChannelFactoryLive,
@@ -98,6 +98,6 @@ export class EffectTauriLink {
 							),
 						).pipe(Stream.scoped);
 
-		yield* streamToAsyncIterator(streamWithServices);
+		yield* toAsyncIterator(streamWithServices);
 	}
 }

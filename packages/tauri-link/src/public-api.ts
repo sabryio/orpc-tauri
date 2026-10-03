@@ -2,19 +2,19 @@ import { ORPCError } from "@orpc/client";
 import { Effect } from "effect";
 import { EffectTauriLink } from "./link";
 import { toORPCError } from "./error-converter";
-import { ContractValidator } from "../resolvers/contract-validator";
-import { ProcedureResolver } from "../resolvers/procedure-resolver";
-import { ConsoleLogger } from "../logger";
-import { DefaultEventNameStrategy } from "../streaming/event-name-strategy";
+import { ContractValidator } from "./resolvers/contract-validator";
+import { ProcedureResolver } from "./resolvers/procedure-resolver";
+import { ConsoleLogger } from "./logger";
+import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 import type {
 	Contract,
 	CallOptions,
 	TauriLinkOptions,
 	Logger,
 	TauriTransportConfig,
-} from "../types";
+} from "./types";
 import type { StreamConfig } from "./link";
-import type { EventNameStrategy } from "../streaming/event-name-strategy";
+import type { EventNameStrategy } from "./streaming/event-name-strategy";
 
 /**
  * Promise-based TauriLink facade over Effect implementation.

@@ -2,7 +2,7 @@ import { Cause, Effect, Queue, Stream } from "effect";
 import { StreamError } from "../errors";
 import { TauriInvoker } from "../services/invoker";
 import { TauriListener } from "../services/listener";
-import { attachEventMeta, type SseEvent } from "../../streaming/sse-types";
+import { attachEventMeta, type SseEvent } from "./sse-types";
 
 /**
  * Configuration for SSE event streaming.
