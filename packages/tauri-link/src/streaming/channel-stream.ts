@@ -1,15 +1,16 @@
-import { Cause, Effect, Queue, Stream } from "effect";
-import { StreamError } from "../errors";
+import { Effect, Stream } from "effect";
 import { TauriChannelFactory } from "../services/channel-factory";
 import { TauriInvoker } from "../services/invoker";
+import { type StreamError } from "../errors";
+import { createQueueStream, forkInvoke } from "./stream-utils";
 
 /**
  * SSE event payload structure from Tauri channels.
  */
 interface SseEvent<T> {
-	readonly event: "message" | "error" | "complete";
-	readonly data?: T;
-	readonly error?: unknown;
+  readonly event: "message" | "error" | "complete";
+  readonly data?: T;
+  readonly error?: unknown;
 }
 
 /**
@@ -21,56 +22,35 @@ interface SseEvent<T> {
  * The channel is created within a Scope for automatic cleanup.
  */
 export const createChannelStream = <T>(
-	command: string,
-	input: unknown,
-	paramName: string,
+  command: string,
+  input: unknown,
+  paramName: string,
 ): Stream.Stream<T, StreamError, TauriInvoker | TauriChannelFactory> =>
-	Stream.callback<T, StreamError, TauriInvoker | TauriChannelFactory>(
-		(queue) =>
-			Effect.gen(function* () {
-				const invoker = yield* TauriInvoker;
-				const factory = yield* TauriChannelFactory;
+  createQueueStream<T, TauriInvoker | TauriChannelFactory>((emit) =>
+    Effect.gen(function* () {
+      const factory = yield* TauriChannelFactory;
 
-				const channel = yield* factory.createChannel<SseEvent<T>>();
+      const channel = yield* factory.createChannel<SseEvent<T>>();
 
-				// Set up channel message handler
-				channel.onmessage = (msg) => {
-					if (msg.event === "message" && msg.data !== undefined) {
-						Queue.offerUnsafe(queue, msg.data);
-					} else if (msg.event === "error") {
-						Queue.failCauseUnsafe(
-							queue,
-							Cause.fail(new StreamError({ cause: msg.error ?? msg })),
-						);
-					} else if (msg.event === "complete") {
-						Queue.endUnsafe(queue);
-					}
-				};
+      // Set up channel message handler
+      channel.onmessage = (msg) => {
+        if (msg.event === "message" && msg.data !== undefined) {
+          emit.value(msg.data);
+        } else if (msg.event === "error") {
+          emit.error(msg.error ?? msg);
+        } else if (msg.event === "complete") {
+          emit.done();
+        }
+      };
 
-				// Invoke command with channel as parameter (fork it so we don't block)
-				yield* Effect.forkScoped(
-					invoker.invoke(command, {
-						...(input as Record<string, unknown>),
-						[paramName]: channel,
-					}).pipe(
-						Effect.catch((error) =>
-							Effect.sync(() =>
-								Queue.failCauseUnsafe(
-									queue,
-									Cause.fail(new StreamError({ cause: error })),
-								),
-							),
-						),
-					),
-				);
-			}).pipe(
-				Effect.catch((error) =>
-					Effect.sync(() =>
-						Queue.failCauseUnsafe(
-							queue,
-							Cause.fail(new StreamError({ cause: error })),
-						),
-					),
-				),
-			),
-	);
+      // Invoke command with channel as parameter (fork it so we don't block)
+      yield* forkInvoke(
+        command,
+        {
+          ...(input as Record<string, unknown>),
+          [paramName]: channel,
+        },
+        emit.error,
+      );
+    }),
+  );
