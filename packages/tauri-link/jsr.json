@@ -3,18 +3,19 @@
   "version": "0.1.3",
   "description": "Type-safe oRPC link for Tauri applications with dual streaming support (SSE events and native channels). Seamlessly bridge TypeScript and Rust with full end-to-end type safety.",
   "exports": {
-    ".": "./dist/index.js",
-    "./link": "./dist/link.export.js",
-    "./meta": "./dist/meta.export.js"
+    ".": "./src/index.ts",
+    "./link": "./src/link.export.ts",
+    "./meta": "./src/meta.export.ts"
   },
   "publish": {
     "include": [
-      "dist",
+      "src",
       "README.md",
       "LICENSE"
     ],
     "exclude": [
-      "!dist"
+      "**/*.test.ts",
+      "**/*.spec.ts"
     ]
   }
 }
