@@ -25,7 +25,7 @@
         "@orpc/client": "^2.0.0-beta.41",
         "@orpc/contract": "^2.0.0-beta.41",
         "@orpc/tanstack-query": "^2.0.0-beta.41",
-        "@sabryio/orpc-tauri": "npm:@jsr/sabryio__orpc-tauri@^0.1.2",
+        "@sabryio/orpc-tauri": "npm:@jsr/sabryio__orpc-tauri@^0.1.3",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-query": "^5.104.0",
         "@tanstack/react-router": "^1.170.32",
@@ -61,7 +61,7 @@
     },
     "packages/tauri-link": {
       "name": "orpc-tauri",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "dependencies": {
         "@orpc/client": "^2.0.0-beta.41",
         "@tauri-apps/api": "^2.2.0",
@@ -301,7 +301,7 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@sabryio/orpc-tauri": ["@jsr/sabryio__orpc-tauri@0.1.2", "https://npm.jsr.io/~/11/@jsr/sabryio__orpc-tauri/0.1.2.tgz", { "dependencies": { "@orpc/client": "^2.0.0-beta.41", "@tauri-apps/api": "^2.2.0", "effect": "^4.0.0" } }, "sha512-8DNc+Pngc78cYug4dI2FONidni8RZXnHkArtyc1CBJyTb2WXms4mUlVBQqhewO748rgUuUDLd3SKKwafKflYUw=="],
+    "@sabryio/orpc-tauri": ["@jsr/sabryio__orpc-tauri@0.1.3", "https://npm.jsr.io/~/11/@jsr/sabryio__orpc-tauri/0.1.3.tgz", { "dependencies": { "@orpc/client": "^2.0.0-beta.41", "@tauri-apps/api": "^2.2.0", "effect": "^4.0.0" } }, "sha512-IrLoc/R0qUvU9wOVlrGzJ9Eh3pUkcoPvt49zJm+f4f038G5HtlANXCzG9wOhoBaSN64bVF13qoMK4rc3N5F47w=="],
 
     "@sec-ant/readable-stream": ["@sec-ant/readable-stream@0.4.1", "", {}, "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg=="],
 

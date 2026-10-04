@@ -818,11 +818,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Add custom middleware (auth, logging, etc.)
 const link = new TauriLink(contract, {
-  invoke: async (command, args) => {
+  invoke: async <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> => {
     console.log(`[Invoke] ${command}`, args);
 
     try {
-      const result = await invoke(command, args);
+      const result = await invoke<T>(command, args);
       console.log(`[Result] ${command}`, result);
       return result;
     } catch (error) {
@@ -837,9 +837,9 @@ const link = new TauriLink(contract, {
 
 ```typescript
 const link = new TauriLink(contract, {
-  invoke: async (command, args) => {
+  invoke: async <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> => {
     // Return mock data - no need to mock Tauri API
-    return { id: 1, name: "Test User" };
+    return { id: 1, name: "Test User" } as T;
   },
 });
 ```
