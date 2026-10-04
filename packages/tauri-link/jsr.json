@@ -1,6 +1,6 @@
 {
   "name": "@sabryio/orpc-tauri",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Type-safe oRPC link for Tauri applications with dual streaming support (SSE events and native channels). Seamlessly bridge TypeScript and Rust with full end-to-end type safety.",
   "exports": {
     ".": "./dist/index.js",
