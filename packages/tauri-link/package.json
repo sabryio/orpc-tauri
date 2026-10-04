@@ -1,6 +1,6 @@
 {
   "name": "orpc-tauri",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Type-safe oRPC link for Tauri IPC with dual streaming support (SSE events and native channels)",
   "license": "MIT",
   "author": "Sabry Awad",
@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.3",
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.6.4",
     "typescript": "catalog:",
     "vitest": "^5.0.3"
   }

@@ -46,5 +46,5 @@ export const ORPC_SYMBOLS = {
  */
 export const DEFAULT_PARAMS = {
   /** Default channel parameter name */
-  CHANNEL: "channel" as const,
+  CHANNEL: "onEvent" as const,
 } as const;
