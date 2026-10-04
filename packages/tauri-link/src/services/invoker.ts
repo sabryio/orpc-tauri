@@ -3,6 +3,14 @@ import { Context, Effect, Layer } from "effect";
 import { TauriInvokeError } from "../errors";
 
 /**
+ * Custom invoke function type - matches Tauri's invoke signature
+ */
+export type InvokeFn = <T = unknown>(
+	command: string,
+	args?: Record<string, unknown>,
+) => Promise<T>;
+
+/**
  * Service for invoking Tauri commands with typed error handling.
  *
  * DIP: Domain code depends on this service interface, not concrete Tauri API.
@@ -36,3 +44,26 @@ export const TauriInvokerLive = Layer.succeed(
 			}),
 	}),
 );
+
+/**
+ * Create a custom TauriInvoker layer with a custom invoke function.
+ *
+ * Useful for testing, middleware, or custom IPC implementations.
+ */
+export function fromCustomInvoke(customInvoke: InvokeFn): Layer.Layer<TauriInvoker> {
+	return Layer.succeed(
+		TauriInvoker,
+		TauriInvoker.of({
+			invoke: <T>(command: string, args?: Record<string, unknown>) =>
+				Effect.tryPromise({
+					try: () => customInvoke<T>(command, args),
+					catch: (cause) =>
+						new TauriInvokeError({
+							command,
+							input: args,
+							cause,
+						}),
+				}),
+		}),
+	);
+}

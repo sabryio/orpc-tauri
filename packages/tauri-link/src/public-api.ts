@@ -1,6 +1,7 @@
 import { Effect, Layer } from "effect";
 import { EffectTauriLink } from "./link";
 import { Logger, ConsoleLoggerLive, fromSimpleLogger } from "./services/logger";
+import { TauriInvokerLive, fromCustomInvoke } from "./services/invoker";
 import { toORPCError } from "./error-converter";
 import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
@@ -33,7 +34,15 @@ export class TauriLink<TContext = unknown> {
       ? fromSimpleLogger(options.logger)
       : ConsoleLoggerLive;
 
-    this.appLayer = Layer.merge(EffectTauriLink.AppLayer, loggerLayer);
+    // Use custom invoke if provided, otherwise default
+    const invokerLayer = options?.invoke
+      ? fromCustomInvoke(options.invoke)
+      : TauriInvokerLive;
+
+    this.appLayer = Layer.merge(
+      Layer.merge(EffectTauriLink.AppLayer, loggerLayer),
+      invokerLayer,
+    );
     this.eventNameStrategy =
       options?.eventNameStrategy ?? new DefaultEventNameStrategy();
     this.resolver = new ProcedureResolver(contract);

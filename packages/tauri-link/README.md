@@ -788,8 +788,15 @@ class TauriLink {
 }
 
 interface TauriLinkOptions {
-  logger?: SimpleLogger; // Default: ConsoleLogger
+  logger?: SimpleLogger;                           // Default: ConsoleLogger
+  invoke?: InvokeFn;                               // Custom invoke function
+  eventNameStrategy?: EventNameStrategy;           // Custom event naming
 }
+
+type InvokeFn = <T = unknown>(
+  command: string,
+  args?: Record<string, unknown>
+) => Promise<T>;
 ```
 
 **Example with custom logger:**
@@ -800,6 +807,40 @@ import { TauriLink, NoopLogger } from "@sabryio/orpc-tauri/link";
 // Disable logging in production
 const link = new TauriLink(contract, {
   logger: new NoopLogger(),
+});
+```
+
+**Example with custom invoke (for middleware/testing):**
+
+```typescript
+import { TauriLink } from "@sabryio/orpc-tauri/link";
+import { invoke } from "@tauri-apps/api/core";
+
+// Add custom middleware (auth, logging, etc.)
+const link = new TauriLink(contract, {
+  invoke: async (command, args) => {
+    console.log(`[Invoke] ${command}`, args);
+    
+    try {
+      const result = await invoke(command, args);
+      console.log(`[Result] ${command}`, result);
+      return result;
+    } catch (error) {
+      console.error(`[Error] ${command}`, error);
+      throw error;
+    }
+  },
+});
+```
+
+**Mocking for tests:**
+
+```typescript
+const link = new TauriLink(contract, {
+  invoke: async (command, args) => {
+    // Return mock data - no need to mock Tauri API
+    return { id: 1, name: "Test User" };
+  },
 });
 ```
 

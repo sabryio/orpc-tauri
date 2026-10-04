@@ -74,4 +74,5 @@ export interface CallOptions<TContext> {
 export interface TauriLinkOptions {
   logger?: import("./services/logger").SimpleLogger;
   eventNameStrategy?: import("./streaming/event-name-strategy").EventNameStrategy;
+  invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
 }

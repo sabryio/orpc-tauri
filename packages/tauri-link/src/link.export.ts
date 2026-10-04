@@ -24,6 +24,9 @@ export { TauriLink } from "./public-api";
 export { ConsoleLogger, NoopLogger } from "./services/logger";
 export type { SimpleLogger } from "./services/logger";
 
+// Invoker utilities
+export type { InvokeFn } from "./services/invoker";
+
 // Event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 export type {
