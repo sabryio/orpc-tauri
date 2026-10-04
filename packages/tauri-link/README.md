@@ -504,10 +504,10 @@ export const contract = {
     // Simple: omit id to use default "onEvent" parameter name
     streamEventsChannel: oc
       .meta(tauri.command("stream_events_channel"))
-      .meta(tauri.transport({ kind: "channel" }))  // Defaults to "onEvent"
+      .meta(tauri.transport({ kind: "channel" })) // Defaults to "onEvent"
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
-      
+
     // Or specify custom parameter name
     streamEventsCustom: oc
       .meta(tauri.command("stream_events_custom"))
@@ -647,12 +647,12 @@ tauri.transport({
 
 ```typescript
 interface TauriMetadata {
-  command?: string;                    // Override command name
-  transport?: TauriTransportConfig;    // Streaming transport config
-  timeout?: number;                    // Timeout in milliseconds
-  debug?: boolean;                     // Enable debug logging
-  tags?: string[];                     // Categorization tags
-  permissions?: string[];              // Required permissions
+  command?: string; // Override command name
+  transport?: TauriTransportConfig; // Streaming transport config
+  timeout?: number; // Timeout in milliseconds
+  debug?: boolean; // Enable debug logging
+  tags?: string[]; // Categorization tags
+  permissions?: string[]; // Required permissions
 }
 
 // Usage
@@ -788,14 +788,14 @@ class TauriLink {
 }
 
 interface TauriLinkOptions {
-  logger?: SimpleLogger;                           // Default: ConsoleLogger
-  invoke?: InvokeFn;                               // Custom invoke function
-  eventNameStrategy?: EventNameStrategy;           // Custom event naming
+  logger?: SimpleLogger; // Default: ConsoleLogger
+  invoke?: InvokeFn; // Custom invoke function
+  eventNameStrategy?: EventNameStrategy; // Custom event naming
 }
 
 type InvokeFn = <T = unknown>(
   command: string,
-  args?: Record<string, unknown>
+  args?: Record<string, unknown>,
 ) => Promise<T>;
 ```
 
@@ -820,7 +820,7 @@ import { invoke } from "@tauri-apps/api/core";
 const link = new TauriLink(contract, {
   invoke: async (command, args) => {
     console.log(`[Invoke] ${command}`, args);
-    
+
     try {
       const result = await invoke(command, args);
       console.log(`[Result] ${command}`, result);
@@ -860,7 +860,7 @@ class MyLogger implements SimpleLogger {
     // Send to your monitoring service
     console.log(msg, data);
   }
-  
+
   error(msg: string, error?: unknown) {
     // Send errors to tracking service
     console.error(msg, error);
@@ -902,7 +902,7 @@ const link = new TauriLink(contract, {
 
 Explore a complete working implementation with all features:
 
-- 🔹 [Full Application](../../apps/web) - Complete Tauri app with RPC
+- 🔹 [Full Application](https://github.com/sabryio/orpc-tauri/tree/main/apps/web) - Complete Tauri app with RPC
 - 🔹 Unary RPC calls (CRUD operations)
 - 🔹 Event-based streaming
 - 🔹 Channel-based streaming
