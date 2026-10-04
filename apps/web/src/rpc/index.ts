@@ -11,9 +11,20 @@ import { TauriLink } from "@sabryio/orpc-tauri/link";
 import { contract, type Contract } from "./contract";
 export { consumeAsyncIterator, getEventMeta } from "@orpc/client";
 
-// Create link with optional custom logger
-// const link = new TauriLink(contract, { logger: customLogger });
-const link = new TauriLink(contract);
+const link = new TauriLink(contract, {
+  invoke: async (command, args) => {
+    console.log(`[Invoke] ${command}`, args);
+
+    try {
+      const result = await invoke(command, args);
+      console.log(`[Result] ${command}`, result);
+      return result;
+    } catch (error) {
+      console.error(`[Error] ${command}`, error);
+      throw error;
+    }
+  },
+});
 
 export const client: RouterContractClient<Contract> = createORPCClient(link);
 

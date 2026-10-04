@@ -62,13 +62,7 @@ export class TauriLink<TContext = unknown> {
   ): Effect.Effect<TauriLink<TContext>, ContractValidationError> {
     return Effect.gen(function* () {
       yield* validateContract(contract);
-      // Create via constructor but catch validation error since already validated
-      try {
-        return new TauriLink<TContext>(contract, options);
-      } catch {
-        // Should never happen since we already validated
-        return new TauriLink<TContext>(contract, options);
-      }
+      return new TauriLink<TContext>(contract, options);
     });
   }
 
@@ -99,7 +93,7 @@ export class TauriLink<TContext = unknown> {
 
       // Check abort signal
       if (callOptions?.signal?.aborted) {
-        yield* new AbortError({ reason: "Request aborted" });
+        return yield* new AbortError({ reason: "Request aborted" });
       }
 
       // Handle streaming vs unary

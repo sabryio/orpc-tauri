@@ -41,13 +41,13 @@ export class ProcedureResolver {
 		return Effect.gen(function* () {
 			const procedure = self.resolve(path);
 			if (!procedure) {
-				yield* new ProcedureNotFoundError({ path });
+				return yield* new ProcedureNotFoundError({ path });
 			}
 
 			const tauriMeta = extractTauriMeta(procedure!);
 
 			if (!tauriMeta?.command) {
-				yield* new MissingCommandMetadataError({ path });
+				return yield* new MissingCommandMetadataError({ path });
 			}
 
 			return tauriMeta!.command;
