@@ -26,7 +26,7 @@ export function FileUploadTab() {
   >([]);
 
   const uploadFileMutation = useMutation(
-    orpc.file.uploadFile.mutationOptions({
+    orpc.file.upload_file.mutationOptions({
       onSuccess: (data) => {
         toast.success(`Uploaded: ${data.filename} (${formatBytes(data.size)})`);
       },

@@ -1,5 +1,5 @@
+import { ORPCError } from "@orpc/client";
 import { toast } from "sonner";
-import { ORPCError } from "@/rpc";
 
 export function mutationHandlers(
   successMsg: string,

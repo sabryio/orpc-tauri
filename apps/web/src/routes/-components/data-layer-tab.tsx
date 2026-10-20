@@ -19,12 +19,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { NumberInput } from "@/components/number-input";
 import { CodeBlock } from "@/components/code-block";
-import { orpc, isDefinedError } from "@/rpc";
+import { orpc } from "@/rpc";
 import { mutationHandlers } from "@/hooks/use-mutation-handlers";
+import { isDefinedError } from "@orpc/client";
 
 const ORPC_MUTATION_CODE = `// useMutation with oRPC
 const createPlanetMutation = useMutation(
-  orpc.planet.createPlanet.mutationOptions({
+  orpc.planet.create_planet.mutationOptions({
     onSuccess: () => {
       toast.success("Planet created");
       queryClient.invalidateQueries({
@@ -42,7 +43,7 @@ createPlanetMutation.mutate({
 
 const ORPC_QUERY_CODE = `// useInfiniteQuery for pagination
 const planetsQuery = useInfiniteQuery(
-  orpc.planet.listPlanetsPaginated.infiniteOptions({
+  orpc.planet.list_planets_paginated.infiniteOptions({
     input: (pageParam) => ({
       limit: 10,
       offset: pageParam ?? 0,
@@ -55,7 +56,7 @@ const planetsQuery = useInfiniteQuery(
 
 const ORPC_ERROR_CODE = `// Error handling with oRPC
 const findPlanetMutation = useMutation(
-  orpc.planet.findPlanet.mutationOptions({
+  orpc.planet.find_planet.mutationOptions({
     onError: (error) => {
       toast.error(
         isDefinedError(error)
@@ -79,7 +80,7 @@ export function DataLayerTab() {
   const [findId, setFindId] = useState("");
 
   const planetsQuery = useInfiniteQuery(
-    orpc.planet.listPlanetsPaginated.infiniteOptions({
+    orpc.planet.list_planets_paginated.infiniteOptions({
       input: (pageParam: number | undefined) => ({
         input: {
           limit: 10,
@@ -92,7 +93,7 @@ export function DataLayerTab() {
   );
 
   const createPlanetMutation = useMutation(
-    orpc.planet.createPlanet.mutationOptions(
+    orpc.planet.create_planet.mutationOptions(
       mutationHandlers("Planet created", "Failed to create planet", () => {
         setPlanetName("");
         setPlanetDescription("");
@@ -102,7 +103,7 @@ export function DataLayerTab() {
   );
 
   const findPlanetMutation = useMutation(
-    orpc.planet.findPlanet.mutationOptions({
+    orpc.planet.find_planet.mutationOptions({
       onSuccess: (data) => toast.success(`Found planet: ${data.name}`),
       onError: (error) => {
         toast.error(
@@ -115,7 +116,7 @@ export function DataLayerTab() {
   );
 
   const deletePlanetMutation = useMutation(
-    orpc.planet.deletePlanet.mutationOptions(
+    orpc.planet.delete_planet.mutationOptions(
       mutationHandlers("Planet deleted", "Failed to delete planet", () =>
         queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
       ),

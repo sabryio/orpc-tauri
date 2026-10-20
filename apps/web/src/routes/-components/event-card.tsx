@@ -1,5 +1,5 @@
-import { getEventMeta } from "@/rpc";
 import type { AppEvent } from "@/rpc/contract";
+import { getEventMeta } from "@orpc/client";
 
 interface EventCardProps {
   event: AppEvent & { _meta?: { id?: string; retry?: number } };

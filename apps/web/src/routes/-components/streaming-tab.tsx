@@ -13,14 +13,15 @@ import { toast } from "sonner";
 import { EventCard } from "./event-card";
 import { CodeBlock } from "@/components/code-block";
 import { useStreamEvents } from "@/hooks/use-stream-events";
-import { client, getEventMeta, consumeAsyncIterator } from "@/rpc";
+import { client } from "@/rpc";
 import type { AppEvent } from "@/rpc/contract";
+import { consumeAsyncIterator, getEventMeta } from "@orpc/client";
 
 const STREAM_HOOK_CODE = `// Custom hook pattern
 const stream = useStreamEvents<EventType>();
 
 stream.startStream(
-  () => client.stream.streamEvents(undefined, {
+  () => client.stream.stream_events(undefined, {
     signal: new AbortController().signal,
   }),
   "Stream completed!",
@@ -32,7 +33,7 @@ stream.isStreaming // boolean`;
 
 const ASYNC_ITERATOR_CODE = `// Direct async iterator consumption
 const cancel = consumeAsyncIterator(
-  client.stream.streamEvents(),
+  client.stream.stream_events(),
   {
     onEvent: (event) => {
       const meta = getEventMeta(event);
@@ -51,7 +52,7 @@ const CHANNEL_CODE = `// Tauri Channel transport (no race condition)
 const channelStream = useStreamEvents();
 
 channelStream.startStream(
-  () => client.stream.streamEventsChannel(undefined, {
+  () => client.stream.stream_events_channel(undefined, {
     signal: new AbortController().signal,
   }),
   "Channel completed!",
@@ -75,7 +76,7 @@ export function StreamingTab() {
   const handleStartEmitListen = () =>
     stream.startStream(
       () =>
-        client.stream.streamEvents(undefined, {
+        client.stream.stream_events(undefined, {
           signal: new AbortController().signal,
         }),
       "Stream completed!",
@@ -84,7 +85,7 @@ export function StreamingTab() {
   const handleStartChannel = () =>
     channelStream.startStream(
       () =>
-        client.stream.streamEventsChannel(undefined, {
+        client.stream.stream_events_channel(undefined, {
           signal: new AbortController().signal,
         }),
       "Channel stream completed!",
@@ -96,7 +97,7 @@ export function StreamingTab() {
     setAsyncError(null);
     setAsyncFinished(false);
 
-    const cancel = consumeAsyncIterator(client.stream.streamEvents(), {
+    const cancel = consumeAsyncIterator(client.stream.stream_events(), {
       onEvent: (event) => {
         const meta = getEventMeta(event);
         setAsyncEvents((prev) => [

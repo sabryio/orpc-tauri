@@ -1,73 +1,85 @@
-import type { TauriMeta, TauriTransportConfig, MetaPlugin } from "./types";
 import { METADATA_KEYS } from "./constants";
+import type { MetaPlugin, TauriMeta, TauriTransportConfig } from "./types";
 
 // ============================================================================
 // Merge Logic
 // ============================================================================
 
 function validateCommandChange(
-  incoming: string | undefined,
-  current: string | undefined,
+	incoming: string | undefined,
+	current: string | undefined,
 ): void {
-  if (incoming && current && incoming !== current) {
-    throw new Error(
-      `[TauriLink] Cannot change command from "${current}" to "${incoming}". Command can only be set once.`,
-    );
-  }
+	if (incoming && current && incoming !== current) {
+		throw new Error(
+			`[TauriLink] Cannot change command from "${current}" to "${incoming}". Command can only be set once.`,
+		);
+	}
 }
 
 function mergeArrayField<T>(
-  incomingField: T[] | undefined,
-  currentField: T[] | undefined,
+	incomingField: T[] | undefined,
+	currentField: T[] | undefined,
 ): T[] | undefined {
-  if (currentField && incomingField) return [...currentField, ...incomingField];
-  return incomingField ?? currentField;
+	if (currentField && incomingField) return [...currentField, ...incomingField];
+	return incomingField ?? currentField;
 }
 
 function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
-  validateCommandChange(incoming.command, current?.command);
+	validateCommandChange(incoming.command, current?.command);
 
-  return {
-    command: incoming.command ?? current?.command,
-    transport: incoming.transport ?? current?.transport,
-    timeout: incoming.timeout ?? current?.timeout,
-    debug: incoming.debug ?? current?.debug,
-    tags: mergeArrayField(incoming.tags, current?.tags),
-    permissions: mergeArrayField(incoming.permissions, current?.permissions),
-  };
+	return {
+		command: incoming.command ?? current?.command,
+		transport: incoming.transport ?? current?.transport,
+		timeout: incoming.timeout ?? current?.timeout,
+		debug: incoming.debug ?? current?.debug,
+		tags: mergeArrayField(incoming.tags, current?.tags),
+		permissions: mergeArrayField(incoming.permissions, current?.permissions),
+	};
 }
 
 // ============================================================================
 // Main Plugin Function
 // ============================================================================
 
-export const tauri = ((incoming: TauriMeta): MetaPlugin => ({
-  name: METADATA_KEYS.TAURI,
-  init(meta: Record<string, unknown>) {
-    const existing = meta[METADATA_KEYS.TAURI] as TauriMeta | undefined;
-    const merged = mergeTauriMeta(incoming, existing);
-    return { ...meta, [METADATA_KEYS.TAURI]: merged };
-  },
+export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
+	name: METADATA_KEYS.TAURI,
+	init(meta: Record<string, unknown>) {
+		const existing = meta[METADATA_KEYS.TAURI] as TauriMeta | undefined;
+		const merged = mergeTauriMeta(incoming, existing);
+		return { ...meta, [METADATA_KEYS.TAURI]: merged };
+	},
 })) as {
-  (meta: TauriMeta): MetaPlugin;
-  command(command: string): MetaPlugin;
-  transport(config: TauriTransportConfig): MetaPlugin;
-  timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
-  debug(debug: TauriMeta["debug"]): MetaPlugin;
+	(meta: Partial<TauriMeta>): MetaPlugin;
+	command(command: string): MetaPlugin;
+	transport(config: TauriTransportConfig): MetaPlugin;
+	listen(): MetaPlugin;
+	channel(
+		id?: Extract<TauriTransportConfig, { kind: "channel" }>["id"],
+	): MetaPlugin;
+	timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
+	debug(debug: TauriMeta["debug"]): MetaPlugin;
 };
 
 // ============================================================================
 // Scoped Helpers
 // ============================================================================
 
-tauri.command = (command): MetaPlugin => tauri({ command } as TauriMeta);
+tauri.command = (command): MetaPlugin => tauri({ command });
 
-tauri.transport = (config): MetaPlugin =>
-  tauri({ transport: config } as TauriMeta);
+tauri.transport = (config): MetaPlugin => tauri({ transport: config });
 
-tauri.timeout = (timeout): MetaPlugin => tauri({ timeout } as TauriMeta);
+tauri.listen = (): MetaPlugin => tauri({ transport: { kind: "listen" } });
 
-tauri.debug = (debug): MetaPlugin => tauri({ debug } as TauriMeta);
+tauri.channel = (id?: { name: string } | string): MetaPlugin =>
+	tauri(
+		id
+			? ({ transport: { kind: "channel", id } } as TauriMeta)
+			: ({ transport: { kind: "channel" } } as TauriMeta),
+	);
+
+tauri.timeout = (timeout): MetaPlugin => tauri({ timeout });
+
+tauri.debug = (debug): MetaPlugin => tauri({ debug });
 
 // ============================================================================
 // Helper Functions
@@ -77,10 +89,10 @@ tauri.debug = (debug): MetaPlugin => tauri({ debug } as TauriMeta);
  * Extract Tauri metadata from a procedure
  */
 export function extractTauriMeta(
-  procedure: Record<string, unknown>,
+	procedure: Record<string, unknown>,
 ): TauriMeta | undefined {
-  const orpcMeta = procedure[METADATA_KEYS.ORPC] as
-    | { meta?: { [METADATA_KEYS.TAURI]?: TauriMeta } }
-    | undefined;
-  return orpcMeta?.meta?.[METADATA_KEYS.TAURI];
+	const orpcMeta = procedure[METADATA_KEYS.ORPC] as
+		| { meta?: { [METADATA_KEYS.TAURI]?: TauriMeta } }
+		| undefined;
+	return orpcMeta?.meta?.[METADATA_KEYS.TAURI];
 }

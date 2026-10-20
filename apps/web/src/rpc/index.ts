@@ -1,16 +1,9 @@
 import { createORPCClient } from "@orpc/client";
 import { type RouterContractClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import { TauriLink } from "@sabryio/orpc-tauri/link";
+import { TauriLink } from "orpc-tauri/link";
 import { invoke } from "@tauri-apps/api/core";
 import { contract, type Contract } from "./contract";
-
-export {
-  consumeAsyncIterator,
-  getEventMeta,
-  isDefinedError,
-  ORPCError
-} from "@orpc/client";
 
 const link = new TauriLink(contract, {
   invoke: async <T = unknown>(

@@ -1,10 +1,7 @@
 import { Effect } from "effect";
-import {
-	ProcedureNotFoundError,
-	MissingCommandMetadataError,
-} from "../errors";
-import { extractTauriMeta } from "../metadata";
 import { METADATA_KEYS, ORPC_SYMBOLS } from "../constants";
+import { MissingCommandMetadataError, ProcedureNotFoundError } from "../errors";
+import { extractTauriMeta } from "../metadata";
 import type { Contract, ORPCMeta, TauriTransportConfig } from "../types";
 
 /**
@@ -29,6 +26,10 @@ export class ProcedureResolver {
 
 	/**
 	 * Extract Tauri command name from procedure path.
+	 *
+	 * Falls back to the last path segment when no explicit command metadata
+	 * exists. The route key is used verbatim — no case conversion — so a
+	 * route key like `delete_planet` invokes the Rust command `delete_planet`.
 	 */
 	extractCommandName(
 		path: readonly string[],
@@ -46,11 +47,18 @@ export class ProcedureResolver {
 
 			const tauriMeta = extractTauriMeta(procedure!);
 
-			if (!tauriMeta?.command) {
+			// Explicit metadata wins, otherwise derive from the route key.
+			if (tauriMeta?.command) {
+				return tauriMeta.command;
+			}
+
+			const lastSegment = path[path.length - 1];
+
+			if (!lastSegment) {
 				return yield* new MissingCommandMetadataError({ path });
 			}
 
-			return tauriMeta!.command;
+			return lastSegment;
 		});
 	}
 
@@ -109,7 +117,9 @@ export class ProcedureResolver {
 	/**
 	 * Get transport configuration.
 	 */
-	getTransportConfig(path: readonly string[]): TauriTransportConfig | undefined {
+	getTransportConfig(
+		path: readonly string[],
+	): TauriTransportConfig | undefined {
 		const procedure = this.resolve(path);
 		if (!procedure) return undefined;
 

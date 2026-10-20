@@ -1,7 +1,7 @@
 import { Effect } from "effect";
+import { METADATA_KEYS } from "../constants";
 import { ContractValidationError } from "../errors";
 import { extractTauriMeta } from "../metadata";
-import { METADATA_KEYS } from "../constants";
 import type { Contract, ORPCMeta } from "../types";
 
 /**
@@ -22,8 +22,7 @@ export const validateContract = (
 				return cause;
 			}
 			return new ContractValidationError({
-				message:
-					cause instanceof Error ? cause.message : String(cause),
+				message: cause instanceof Error ? cause.message : String(cause),
 			});
 		},
 	});
@@ -41,7 +40,10 @@ function extractCommands(
 
 	if (orpcMeta) {
 		const tauriMeta = extractTauriMeta(obj as Record<string, unknown>);
-		const commandName = tauriMeta?.command;
+
+		// Effective command name: explicit metadata, or derived from the
+		// last path segment (verbatim, same rule as ProcedureResolver).
+		const commandName = tauriMeta?.command ?? path[path.length - 1];
 
 		if (commandName) {
 			const procedurePath = path.join(".");
@@ -53,7 +55,7 @@ function extractCommands(
 						`Duplicate command name detected: "${commandName}"\n` +
 						`  - First defined at: ${existingPath}\n` +
 						`  - Duplicate found at: ${procedurePath}\n` +
-						`Each Tauri command must have a unique name.`,
+						"Each Tauri command must have a unique name.",
 					duplicateCommand: commandName,
 					paths: [existingPath, procedurePath],
 				});
@@ -64,7 +66,11 @@ function extractCommands(
 	}
 
 	for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-		if (key !== METADATA_KEYS.ORPC && typeof value === "object" && value !== null) {
+		if (
+			key !== METADATA_KEYS.ORPC &&
+			typeof value === "object" &&
+			value !== null
+		) {
 			extractCommands(value, [...path, key], commandMap);
 		}
 	}

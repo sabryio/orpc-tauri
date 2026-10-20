@@ -61,11 +61,11 @@ tauri-orpc-contract/
 
 ## Architecture
 
-**Contract-first design**: Define oRPC contracts with Zod schemas in `apps/web/src/rpc/contract.ts`. Types flow to both frontend (via oRPC client) and backend (via contract metadata). Rust commands use snake_case, mapped to camelCase in TypeScript via contract metadata.
+**Contract-first design**: Define oRPC contracts with Zod schemas in `apps/web/src/rpc/contract.ts`. Types flow to both frontend (via oRPC client) and backend (via contract metadata). Contract route keys are the snake_case Rust command names — the link derives commands from route keys, and `tauri.command(...)` meta is only an explicit override.
 
 **Dual streaming transports**:
-- **SSE events** - `tauri.transport({kind: "stream"})` with unique event names per stream
-- **Tauri channels** - `{kind: "channel"}` with Channel type passed as function parameter
+- **SSE events** - `tauri.listen()` with unique event names per stream
+- **Tauri channels** - `tauri.channel()` with Channel type passed as function parameter
 
 The custom TauriLink (`packages/tauri-link`) reads contract metadata to route calls to the appropriate Tauri command and streaming handler.
 

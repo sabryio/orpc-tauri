@@ -33,6 +33,7 @@
         "@varlock/vite-integration": "1.5.1",
         "change-case": "^5.4.4",
         "lucide-react": "catalog:",
+        "orpc-tauri": "workspace:*",
         "react": "catalog:",
         "react-dom": "catalog:",
         "react-dropzone": "^20.1.2",

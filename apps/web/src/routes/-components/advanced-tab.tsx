@@ -16,7 +16,7 @@ import { orpc } from "@/rpc";
 const STREAMED_QUERY_CODE = `// useQuery with .streamedOptions()
 // Accumulates ALL events into array
 const streamedQuery = useQuery(
-  orpc.stream.streamEvents.streamedOptions({
+  orpc.stream.stream_events.streamedOptions({
     retry: false,
     enabled: false,
     gcTime: 0,
@@ -30,7 +30,7 @@ streamedQuery.refetch() // Start stream`;
 const LIVE_QUERY_CODE = `// useQuery with .liveOptions()
 // Shows LATEST event only
 const liveQuery = useQuery(
-  orpc.stream.streamEvents.liveOptions({
+  orpc.stream.stream_events.liveOptions({
     retry: false,
     enabled: false,
     gcTime: 0,
@@ -51,7 +51,7 @@ interface StreamEvent {
 
 export function AdvancedTab() {
   const streamedQuery = useQuery(
-    orpc.stream.streamEvents.streamedOptions({
+    orpc.stream.stream_events.streamedOptions({
       retry: false,
       enabled: false,
       gcTime: 0,
@@ -59,7 +59,7 @@ export function AdvancedTab() {
   );
 
   const liveQuery = useQuery(
-    orpc.stream.streamEvents.liveOptions({
+    orpc.stream.stream_events.liveOptions({
       retry: false,
       enabled: false,
       gcTime: 0,

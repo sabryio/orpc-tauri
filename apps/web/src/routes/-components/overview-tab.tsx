@@ -8,7 +8,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 
 const ORPC_CODE = `// useInfiniteQuery with oRPC
 const planetsQuery = useInfiniteQuery(
-  orpc.planet.listPlanetsPaginated.infiniteOptions({
+  orpc.planet.list_planets_paginated.infiniteOptions({
     input: (pageParam: number | undefined) => ({
       limit: 10,
       offset: pageParam ?? 0,
@@ -32,7 +32,7 @@ interface OverviewTabProps {
 
 export function OverviewTab({ pingQuery, onTabChange }: OverviewTabProps) {
   const planetsQuery = useInfiniteQuery(
-    orpc.planet.listPlanetsPaginated.infiniteOptions({
+    orpc.planet.list_planets_paginated.infiniteOptions({
       input: (pageParam: number | undefined) => ({
         input: {
           limit: 10,

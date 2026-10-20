@@ -76,7 +76,6 @@ Create a contract that describes your API. This is your single source of truth.
 ```typescript
 import { z } from "zod";
 import { oc } from "@orpc/contract";
-import { tauri } from "@sabryio/orpc-tauri/meta";
 
 // 1. Define your data shapes with Zod
 const PingResponseSchema = z.object({
@@ -87,8 +86,8 @@ const PingResponseSchema = z.object({
 // 2. Build your contract
 export const contract = {
   ping: {
+    // The route key IS the Rust command name — no metadata needed!
     ping: oc
-      .meta(tauri.command("ping")) // Maps to Rust command
       .input(z.void()) // No input required
       .output(PingResponseSchema), // Typed response
   },
@@ -226,6 +225,7 @@ Perfect for broadcasting updates to multiple listeners. Uses Tauri's event syste
 
 ```typescript
 import { asyncIteratorObject } from "@orpc/contract";
+import { tauri } from "@sabryio/orpc-tauri/meta";
 
 const EventSchema = z.object({
   type: z.literal("stream"),
@@ -235,11 +235,12 @@ const EventSchema = z.object({
   }),
 });
 
+// Route keys are the Rust command names (snake_case, verbatim).
+// `stream_events` maps to the Rust command `stream_events` automatically.
 export const contract = {
   stream: {
-    streamEvents: oc
-      .meta(tauri.command("stream_events"))
-      .meta(tauri.transport({ kind: "stream" })) // Simple config - link handles event names
+    stream_events: oc
+      .meta(tauri.listen()) // Event-based streaming — link handles event names
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
   },
@@ -491,32 +492,19 @@ Optimized for point-to-point streaming with lower overhead. Uses Tauri's native 
 **`src/rpc/contract.ts`**
 
 ```typescript
-const EventSchema = z.object({
-  type: z.literal("stream"),
-  data: z.object({
-    message: z.string(),
-    count: z.number().int(),
-  }),
-});
-
 export const contract = {
   stream: {
-    // Simple: omit id to use default "onEvent" parameter name
-    streamEventsChannel: oc
-      .meta(tauri.command("stream_events_channel"))
-      .meta(tauri.transport({ kind: "channel" })) // Defaults to "onEvent"
+    // Route key `stream_events_channel` maps to the Rust command
+    // `stream_events_channel` automatically. Metadata only configures
+    // the transport.
+    stream_events_channel: oc
+      .meta(tauri.channel()) // Defaults to "onEvent" parameter name
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
 
-    // Or specify custom parameter name
-    streamEventsCustom: oc
-      .meta(tauri.command("stream_events_custom"))
-      .meta(
-        tauri.transport({
-          kind: "channel",
-          id: "onEvent", // Custom Rust parameter name
-        }),
-      )
+    // Custom parameter name
+    stream_events_custom: oc
+      .meta(tauri.channel("onEvent")) // Rust param `on_event`, camelCased by Tauri IPC
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
   },
@@ -616,38 +604,66 @@ for await (const event of await client.stream.streamEvents(undefined)) {
 
 Configure RPC behavior through declarative metadata attached to your contract procedures.
 
-### `tauri.command(name: string)`
+### Command Name Auto-Mapping
 
-Maps a contract procedure to a specific Rust command name.
+You don't need to declare the command name — it's derived from the **last segment of the route path, verbatim**:
 
 ```typescript
-oc.meta(tauri.command("create_planet")); // Invokes: create_planet
+// Route key `delete_planet` → invokes Rust command `delete_planet`
+delete_planet: oc
+  .input(z.object({ input: z.object({ id: z.number().int() }) }))
+  .output(z.void()),
 ```
 
-### `tauri.transport(config: TransportConfig)`
+Write the route key exactly as the `#[tauri::command]` function name (snake_case). No case conversion happens — the key and the Rust command name are the same string.
 
-Configures streaming transport mode.
+Override only when the command name differs from the route key:
 
 ```typescript
-// Event-based streaming (SSE-style)
-tauri.transport({ kind: "stream" });
+// Route `planet.remove` → invokes `destroy_planet` instead
+remove: oc.meta(tauri.command("destroy_planet")).input(z.void()).output(z.void()),
+```
+
+Duplicate command names (whether derived or explicit) are detected at contract-construction time and throw a descriptive validation error.
+
+### Streaming Helpers
+
+```typescript
+// Event-based streaming (SSE-style) — the frontend listens to Tauri events
+tauri.listen();
 
 // Channel-based streaming (direct pipe)
-// Omit id to use default "onEvent" parameter name
-tauri.transport({ kind: "channel" });
+// Omit id to use the default "onEvent" parameter name
+tauri.channel();
 
-// Or specify custom parameter name
-tauri.transport({
-  kind: "channel",
-  id: "customChannel", // Parameter name in Rust (defaults to "onEvent" if omitted)
-});
+// Or specify the custom channel parameter name
+tauri.channel("onEvent");
+```
+
+### Transport (raw config)
+
+For full control, use the transport object directly:
+
+```typescript
+oc.meta(
+  tauri.transport({
+    kind: "listen",
+  }),
+);
+
+oc.meta(
+  tauri.transport({
+    kind: "channel",
+    id: "customChannel", // Parameter name in Rust (defaults to "onEvent" if omitted)
+  }),
+);
 ```
 
 ### Additional Options
 
 ```typescript
 interface TauriMetadata {
-  command?: string; // Override command name
+  command?: string; // Override command name (optional — derived from route key when omitted)
   transport?: TauriTransportConfig; // Streaming transport config
   timeout?: number; // Timeout in milliseconds
   debug?: boolean; // Enable debug logging
@@ -655,10 +671,14 @@ interface TauriMetadata {
   permissions?: string[]; // Required permissions
 }
 
-// Usage
+// Scoped helpers
+oc.meta(tauri.timeout(10000));
+oc.meta(tauri.debug(true));
+
+// Or one object with everything
 oc.meta(
   tauri({
-    command: "fetch_planets",
+    command: "fetch_planets", // Optional override
     timeout: 10000,
     debug: true,
     tags: ["crud", "public"],
@@ -694,7 +714,7 @@ import { ORPCError, isDefinedError } from "@orpc/client";
 import { client } from "./rpc";
 
 try {
-  const planet = await client.planet.findPlanet({
+  const planet = await client.planet.find_planet({
     input: { id: 999 },
   });
 } catch (error) {
@@ -731,9 +751,8 @@ const StandardApiErrors = {
 
 export const contract = {
   planet: {
-    findPlanet: oc
-      .meta(tauri.command("find_planet"))
-      .input(z.object({ id: z.number() }))
+    find_planet: oc
+      .input(z.object({ input: z.object({ id: z.number().int() }) }))
       .output(PlanetSchema)
       .errors(StandardApiErrors), // Attach error definitions
   },
@@ -744,7 +763,7 @@ Now TypeScript knows about your error shapes:
 
 ```typescript
 try {
-  const planet = await client.planet.findPlanet({ input: { id: 999 } });
+  const planet = await client.planet.find_planet({ input: { id: 999 } });
 } catch (error) {
   if (error instanceof ORPCError) {
     if (isDefinedError(error)) {

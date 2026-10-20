@@ -30,7 +30,7 @@ If you need to learn more about particular Effect APIs and concepts that the gui
 ### Shared Utilities
 - `src/resolvers/contract-validator.ts` - Contract structure validation
 - `src/resolvers/procedure-resolver.ts` - Extract metadata from contract paths
-- `src/metadata.ts` - Tauri metadata builder (tauri.command, tauri.transport)
+- `src/metadata.ts` - Tauri metadata builder (tauri.command, tauri.listen, tauri.channel, tauri.transport)
 - `src/logger.ts` - Logger implementations (ConsoleLogger, NoopLogger)
 - `src/types.ts` - Shared type definitions
 
@@ -52,7 +52,7 @@ If you need to learn more about particular Effect APIs and concepts that the gui
 | src/error-converter.ts            | Convert Effect errors to ORPCError at boundary          |
 | src/resolvers/contract-validator.ts  | Contract structure validation                        |
 | src/resolvers/procedure-resolver.ts  | Extract metadata from contract paths                 |
-| src/metadata.ts                   | Tauri metadata builder (tauri.command, tauri.transport) |
+| src/metadata.ts                   | Tauri metadata builder (tauri.command, tauri.listen, tauri.channel, tauri.transport) |
 
 ## Commands
 
@@ -69,7 +69,9 @@ bun run test --watch
 
 ## Conventions
 
-- Link reads contract metadata to determine command name, streaming mode, transport type
+- Link reads contract metadata to determine streaming mode, transport type, and (optionally) an explicit command override
+- Command names are derived from the last route-path segment verbatim (no case conversion) when no explicit `tauri.command(...)` meta exists
+- Duplicate effective command names (derived or explicit) fail at contract validation time
 - Unary calls: `Effect.runPromise()` at boundary converts Effect to Promise
 - Event streaming: Effect.Stream with automatic listener cleanup via Scope
 - Channel streaming: Effect.Stream with channel messages, no manual cleanup needed
@@ -111,7 +113,7 @@ bun run test --watch
 - **Scope cleanup:** Listeners registered in Scope are cleaned up automatically, no manual `unlisten()`
 - **Error unwrapping:** Effect errors wrap original Tauri errors in `.cause` property, unwrapped at boundary
 - Contract validation runs at link construction, throws if structure invalid
-- Rust command names are snake_case, contract metadata stores them verbatim
+- Rust command names are snake_case; contract route keys use the same snake_case string exactly, so the command derives from the path with zero metadata
 - AbortSignal checked before invoke, not passed to Tauri (Tauri has no cancellation API)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

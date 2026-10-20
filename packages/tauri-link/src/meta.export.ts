@@ -12,19 +12,22 @@
  * import { tauri } from "@sabryio/orpc-tauri/meta";
  * import { oc } from "@orpc/contract";
  *
- * const procedure = oc
- *   .meta(tauri.command("my_command"))
- *   .meta(tauri.transport({ kind: "stream" }))
+ * // The route key IS the Rust command name — no meta needed.
+ * const unaryProcedure = oc.input(z.void()).output(PingSchema);
+ *
+ * // Explicit overrides and streaming transports use metadata helpers.
+ * const streamProcedure = oc
+ *   .meta(tauri.listen())
  *   .input(z.void())
  *   .output(EventSchema);
  * ```
  */
 
 // Meta module - Contract metadata utilities
-export { tauri, extractTauriMeta } from "./metadata";
+export { extractTauriMeta, tauri } from "./metadata";
 
 export type {
+	MetaPlugin,
 	TauriMeta,
 	TauriTransportConfig,
-	MetaPlugin,
 } from "./types";

@@ -1,6 +1,6 @@
+import { isDefinedError } from "@orpc/client";
 import { useState } from "react";
 import { toast } from "sonner";
-import { isDefinedError } from "@/rpc";
 
 export function useStreamEvents<T>() {
   const [events, setEvents] = useState<T[]>([]);
