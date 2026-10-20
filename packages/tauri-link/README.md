@@ -615,7 +615,7 @@ on_event.send(Event::default().progress(bytes_read, total))?;
 on_event.send(Event::default().event("done"))?;
 ```
 
-**TypeScript side** — pass the typed `onProgress` call option:
+**TypeScript side** — pass the typed `onProgress` call option (typing ships with the package via an ambient `@orpc/client` augmentation — no `declare module` needed in your app):
 
 ```typescript
 import type { ProgressInfo } from "@sabryio/orpc-tauri/link";

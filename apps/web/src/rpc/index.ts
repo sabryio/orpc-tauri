@@ -1,21 +1,12 @@
 import { createORPCClient } from "@orpc/client";
 import type { RouterContractClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
-import type { ProgressInfo } from "orpc-tauri/link";
 import { invoke } from "@tauri-apps/api/core";
 import { TauriLink } from "orpc-tauri/link";
 import { type Contract, contract } from "./contract";
 
-// Augment the oRPC client options with the transfer progress callback
-// consumed by TauriLink for channel-mode streams (`progress:` control
-// envelopes). Type-safe for all `client.*` and `orpc.*` callsites.
-declare module "@orpc/client" {
-	// biome-ignore lint/correctness/noUnusedVariables: augmentation must mirror the generic signature
-	interface ClientOptions<T> {
-		/** Transfer progress callback — fires for channel streams (Rust `.progress()`). */
-		onProgress?: (info: ProgressInfo) => void;
-	}
-}
+// `onProgress` call-option typing ships with the orpc-tauri package via its
+// ambient `@orpc/client` augmentation — no local `declare module` needed.
 
 const link = new TauriLink(contract, {
 	invoke: async <T = unknown>(

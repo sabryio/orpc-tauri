@@ -1,5 +1,7 @@
 // Export TauriLink (Effect-based implementation with Promise facade)
 
+import type { ProgressInfo } from "./streaming/progress-types";
+
 // Export typed error classes for power users (optional advanced usage)
 export {
 	AbortError,
@@ -41,3 +43,18 @@ export type {
 	TauriMeta,
 	TauriTransportConfig,
 } from "./types";
+
+// ============================================================================
+// Ambient augmentation (shipped so consumers get typed `onProgress` with zero
+// boilerplate). Source of truth: src/client-augmentation.ts — keep identical.
+// ============================================================================
+
+declare module "@orpc/client" {
+	interface ClientOptions<T> {
+		/**
+		 * Transfer progress callback — fires for channel-mode streams
+		 * (data-less `progress:` control envelopes; see ProgressInfo).
+		 */
+		onProgress?: (info: ProgressInfo) => void;
+	}
+}
