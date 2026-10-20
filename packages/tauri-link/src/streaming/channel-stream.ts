@@ -1,4 +1,4 @@
-import { Effect, Exit, type Stream } from "effect";
+import { Effect, type Stream } from "effect";
 import type { StreamError } from "../errors";
 import { TauriChannelFactory } from "../services/channel-factory";
 import type { TauriInvoker } from "../services/invoker";
@@ -22,6 +22,14 @@ interface SseEvent<T> {
 	/** Comment (SSE `:` field) — carries control signals such as progress. */
 	readonly comment?: string;
 }
+
+/**
+ * How long the scope teardown waits for Tauri's `{end}` envelope before it
+ * unregisters the invoke callback itself. Successful and cancelled backends
+ * drop their Channel clone within at most one send/poll interval — far below
+ * this — so the grace only ever fires for a hung or leaking backend.
+ */
+const CHANNEL_TEARDOWN_GRACE_MS = 10_000;
 
 /**
  * Creates an Effect.Stream that consumes data from a Tauri Channel.
@@ -56,30 +64,55 @@ export const createChannelStream = <T>(
 
 			// Scope teardown (completion, failure, or mid-stream cancellation):
 			// stop the pipeline first so late envelopes can't reach the consumer
-			// (onProgress or the queue), then unregister the underlying Tauri
-			// invoke callback so Rust keeps sending into a dead channel.
+			// (onProgress or the queue), then hand the underlying Tauri invoke
+			// callback back to Tauri's own end-of-channel cleanup.
 			//
-			// Unregistering is only needed on ABNORMAL exits: Tauri itself sends
-			// a `{ end: true }` envelope when the backend's last Channel clone
-			// drops (command completion), and the JS Channel then unregisters
-			// its own callback in order. Unregistering before that envelope
-			// arrives steals the cleanup and makes Tauri warn
-			// `Couldn't find callback id` after every normal completion. On an
-			// abnormal exit (abort, failure, early `.return()`) no `end` can
-			// ever come — Rust is still running — so the client must do it here.
+			// The callback is NEVER unregistered eagerly, in every exit case:
+			// Tauri sends `{ end: true }` when the backend's last Channel clone
+			// drops (natural completion, or a cancelled task stopping) and the
+			// JS Channel then unregisters itself in order. Unregistering
+			// ourselves first either steals that cleanup — Tauri warns
+			// `Couldn't find callback id` after every normal completion — or
+			// makes each trailing send of a cancelled stream warn the same way.
+			// Trailing envelopes are swallowed by the no-op `onmessage` above.
+			//
+			// Safety net for backends that never send `{end}` (leaked channel
+			// clone, hung task): unregister after a grace period. Idempotent —
+			// if the `{end}` path already ran, this deletes a non-existent key.
 			yield* Effect.addFinalizer((exit) =>
 				Effect.gen(function* () {
 					channel.onmessage = () => {};
-					if (Exit.isFailure(exit)) {
-						const cleanup = (
-							channel as unknown as { cleanupCallback?: () => void }
-						).cleanupCallback;
-						if (typeof cleanup === "function") {
+					const channelLike = channel as unknown as {
+						cleanupCallback?: () => void;
+					};
+					const tauriCleanup = channelLike.cleanupCallback;
+					if (typeof tauriCleanup === "function") {
+						let timer: ReturnType<typeof setTimeout> | undefined;
+						let cleaned = false;
+						const cleanupOnce = () => {
+							if (cleaned) return;
+							cleaned = true;
+							if (timer !== undefined) clearTimeout(timer);
 							try {
-								cleanup.call(channel);
+								tauriCleanup.call(channel);
 							} catch {
-								// Callback already gone (e.g. Rust sent `end`) — nothing to do.
+								// Callback already gone — nothing to do.
 							}
+						};
+						// Tauri's Channel calls this on its own `{end}` envelope —
+						// route it through `cleanupOnce` to cancel the grace timer.
+						channelLike.cleanupCallback = cleanupOnce;
+						timer = setTimeout(cleanupOnce, CHANNEL_TEARDOWN_GRACE_MS);
+						// Don't hold test/worker processes open for the grace period
+						// when a stream outlives everything else.
+						if (
+							typeof timer === "object" &&
+							timer !== null &&
+							"unref" in timer &&
+							typeof (timer as unknown as { unref?: () => void }).unref ===
+								"function"
+						) {
+							(timer as unknown as { unref: () => void }).unref();
 						}
 					}
 
