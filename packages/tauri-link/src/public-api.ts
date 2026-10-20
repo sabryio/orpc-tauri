@@ -8,8 +8,10 @@ import type { StreamConfig } from "./link";
 import { EffectTauriLink } from "./link";
 import { validateContract } from "./resolvers/contract-validator";
 import { ProcedureResolver } from "./resolvers/procedure-resolver";
+import type { RustResourceHandle } from "./resource-handle";
 import { fromCustomInvoke, TauriInvokerLive } from "./services/invoker";
 import { ConsoleLoggerLive, fromSimpleLogger, Logger } from "./services/logger";
+import { closeResource } from "./services/resource";
 import type { EventNameStrategy } from "./streaming/event-name-strategy";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 import { makeProgressParser } from "./streaming/progress";
@@ -18,6 +20,7 @@ import type {
 	CallOptions,
 	Contract,
 	TauriLinkOptions,
+	TauriResourceConfig,
 	TauriTransportConfig,
 } from "./types";
 
@@ -115,6 +118,7 @@ export class TauriLink<TContext = unknown> {
 						callOptions?.onProgress,
 						timeoutMs,
 						callOptions?.signal,
+						self.resolver.getResource(path),
 					) as TOutput;
 				}
 
@@ -124,6 +128,7 @@ export class TauriLink<TContext = unknown> {
 					transportConfig,
 					timeoutMs,
 					callOptions?.signal,
+					self.resolver.getResource(path),
 				) as TOutput;
 			}
 
@@ -183,6 +188,7 @@ export class TauriLink<TContext = unknown> {
 		transportConfig: TauriTransportConfig | undefined,
 		timeoutMs?: number,
 		signal?: AbortSignal,
+		resource?: TauriResourceConfig,
 	): AsyncIterableIterator<TOutput> {
 		// Check if transport config has stream ID configuration
 		const hasStreamIdConfig =
@@ -236,6 +242,7 @@ export class TauriLink<TContext = unknown> {
 			},
 			timeoutMs,
 			signal,
+			resource,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(
@@ -252,6 +259,7 @@ export class TauriLink<TContext = unknown> {
 		onProgress?: (info: ProgressInfo) => void,
 		timeoutMs?: number,
 		signal?: AbortSignal,
+		resource?: TauriResourceConfig,
 	): AsyncIterableIterator<TOutput> {
 		const channelConfig =
 			transportConfig?.kind === "channel" ? transportConfig : undefined;
@@ -270,8 +278,26 @@ export class TauriLink<TContext = unknown> {
 			progressParser: makeProgressParser(channelConfig?.progress),
 			timeoutMs,
 			signal,
+			resource,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);
+	}
+
+	/**
+	 * Rust-resource lifecycle facade (mirrors `.call` / `.stream`).
+	 */
+	get resource(): {
+		close: (
+			handle: RustResourceHandle | { rid: number } | number,
+		) => Promise<void>;
+	} {
+		return {
+			close: async (handle): Promise<void> => {
+				await Effect.runPromise(
+					closeResource(handle).pipe(Effect.provide(this.appLayer)),
+				);
+			},
+		};
 	}
 }

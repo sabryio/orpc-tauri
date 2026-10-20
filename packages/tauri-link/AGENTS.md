@@ -74,6 +74,9 @@ bun run test --watch
 - Command names are derived from the last route-path segment verbatim (no case conversion) when no explicit `tauri.command(...)` meta exists
 - Channel transport ids accept snake_case or camelCase and normalize to camelCase (Tauri IPC keys args in camelCase)
 - Channel streams support transfer progress: data-less `progress:<read>/<total>` comment envelopes fire the `onProgress` call option, never yielded as payload
+- Resource-backed streams (`tauri.resource()` meta): the Rust command announces its task handle once with a data-less `handle:<rid>` comment envelope (`Event::default().handle(rid)` builder); the link swallows it, keeps the first rid, and closes the resource via `plugin:resources|close` on abnormal stream exits (consumer abort/failure/early `.return()`) — never on normal completion; `autoClose: false` opts out; close failures are swallowed
+- `TauriLink.resource.close(handle)` facade mirrors `@tauri-apps/api/core` Resource.close (same `plugin:resources|close` IPC); `RustResourceHandle`/`asResourceHandle` brand is compile-time only
+- Early consumer exit works because streamToAsyncIterator cancels the ReadableStream (`reader.cancel()`) when the consumer leaves without completion — that interruption drives scope teardown (and resource auto-close)
 - Duplicate effective command names (derived or explicit) fail at contract validation time
 - `tauri.timeout(ms)` is a client-side deadline: whole-call for unary (`ORPCError("TIMEOUT")` at boundary), inactivity window for streams (typed `TimeoutError` fails the iterator; Rust side unaffected)
 - No dead metadata: every `TauriMeta` field is consumed by the link (`tags`/`permissions` were cut — Tauri capabilities belong in `src-tauri/capabilities/*.json`)
@@ -120,6 +123,6 @@ bun run test --watch
 - **Error unwrapping:** Effect errors wrap original Tauri errors in `.cause` property, unwrapped at boundary
 - Contract validation runs at link construction, throws if structure invalid
 - Rust command names are snake_case; contract route keys use the same snake_case string exactly, so the command derives from the path with zero metadata
-- AbortSignal is checked before invoke, and wired mid-stream via Stream.interruptWhen: aborting a stream tears it down and rejects with ORPCError("CLIENT_CLOSED_REQUEST"); a channel stream's scope teardown also unregisters the Tauri IPC callback (no `end` from Rust on cancel), so onProgress/payloads stop instantly; the Rust command itself still runs (Tauri has no server-side cancellation)
+- AbortSignal is checked before invoke, and wired mid-stream via Stream.interruptWhen: aborting a stream tears it down and rejects with ORPCError("CLIENT_CLOSED_REQUEST"); on an ABNORMAL exit a channel stream unregisters the Tauri IPC callback in teardown (no `{end}` can come while Rust still holds its Channel clone), so onProgress/payloads stop instantly; on a SUCCESS exit the callback is left for Tauri — it sends `{end: true}` when the backend's last Channel clone drops, and the JS Channel unregisters itself (unregistering first makes Tauri warn `Couldn't find callback id` on every completion). The Rust command itself still runs on abort (Tauri has no automatic server-side cancellation) — `tauri.resource()` adds that
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

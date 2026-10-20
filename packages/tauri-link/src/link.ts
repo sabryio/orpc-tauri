@@ -50,6 +50,13 @@ export interface StreamConfig {
 	 * `ORPCError("CLIENT_CLOSED_REQUEST")` at the boundary.
 	 */
 	readonly signal?: AbortSignal;
+	/**
+	 * Rust-resource lifecycle (`tauri.resource()` meta). When set, the stream
+	 * captures the `handle:<rid>` announcement and, if autoClose (default
+	 * true), closes the resource when the stream exits abnormally — cancel,
+	 * failure, or consumer early exit. Normal completion never auto-closes.
+	 */
+	readonly resource?: { readonly autoClose?: boolean };
 }
 
 /**
@@ -119,6 +126,7 @@ export class EffectTauriLink {
 				command,
 				input,
 				config.listenConfig,
+				config.resource,
 			);
 		} else if (config.mode === "channel" && config.channelParam) {
 			baseStream = createChannelStream<TOutput>(
@@ -127,6 +135,7 @@ export class EffectTauriLink {
 				config.channelParam,
 				config.onProgress,
 				config.progressParser,
+				config.resource,
 			);
 		} else {
 			baseStream = Stream.fail(

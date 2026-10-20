@@ -12,6 +12,7 @@ Tauri 2 desktop application with React 19 frontend. Demonstrates type-safe RPC b
 | src/rpc/index.ts            | RPC client setup with TauriLink                           |
 | src-tauri/                  | Rust backend (see src-tauri/AGENTS.md)                    |
 | src/routes/                 | TanStack Router routes with tab-based UI                  |
+| src/routes/-components/resource-tab.tsx | Rust resources tab (lifecycle + cancellable download) |
 
 ## Commands
 
@@ -49,5 +50,6 @@ bun env:generate
 - Contract `input(z.void())` required for commands with no input, not omitted
 - TauriLink handles both unary calls and streaming via same client interface
 - Rust commands return `Result<T, AppError>`, errors map to oRPC error codes via ErrorHandler
+- Resource handles (`tauri.resource()` procedures) take/produce plain `{ rid: number }` (`ResourceHandleSchema`) — matches `RustResourceHandle` from orpc-tauri (brand is compile-time only); `link` is exported from `@/rpc` for `link.resource.close(handle)` demos
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

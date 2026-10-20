@@ -56,11 +56,12 @@ pub struct DownloadFileInput {
     pub total_bytes: Option<u64>,
 }
 
-const CHUNK_SIZE: usize = 32 * 1024; // 32 KiB
-const DEFAULT_TOTAL: usize = 256 * 1024; // 256 KiB
-const MAX_TOTAL: u64 = 2 * 1024 * 1024; // 2 MB safety cap for the demo
-const PROGRESS_EVERY_N_CHUNKS: usize = 2; // one progress tick per N chunks
-const DEMO_DELAY: Duration = Duration::from_millis(250);
+/// Shared demo pacing/type sizes (also used by `resource_file_download`).
+pub(crate) const CHUNK_SIZE: usize = 32 * 1024; // 32 KiB
+pub(crate) const DEFAULT_TOTAL: usize = 256 * 1024; // 256 KiB
+pub(crate) const MAX_TOTAL: u64 = 2 * 1024 * 1024; // 2 MB safety cap for the demo
+pub(crate) const PROGRESS_EVERY_N_CHUNKS: usize = 2; // one progress tick per N chunks
+pub(crate) const DEMO_DELAY: Duration = Duration::from_millis(250);
 
 #[tauri::command]
 pub async fn download_file(

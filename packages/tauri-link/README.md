@@ -35,6 +35,7 @@
 | 🏗️ **Clean Architecture** | SOLID principles with Effect TypeScript internals  |
 | 🔍 **Metadata-Driven**    | Configure transport behavior via contract metadata |
 | ⚡ **Resource Safe**      | Automatic cleanup and memory management            |
+| ✅ **Rust Resources**     | Resource-backed streams with server-side cancellation |
 
 ## Installation
 
@@ -498,7 +499,7 @@ for await (const chunk of iterator) {
 
 Notes:
 
-- **The Rust command is unaffected** — Tauri has no cancellation API honoured by Rust commands, so a cancelled command runs to completion; only consumption stops. On teardown the link stops processing envelopes and unregisters the channel's IPC callback (a cancelled stream has no `end` envelope, so the client must release it), which is why `onProgress` and payloads stop instantly. Long-running commands can check `on_event.closed()` themselves if they want to short-circuit production.
+- **The Rust command is unaffected** — Tauri has no cancellation API honoured by Rust commands, so a cancelled command runs to completion; only consumption stops. On cancellation the link stops processing envelopes and unregisters the channel's IPC callback (a cancelled stream has no `{end}` envelope — Rust still holds its channel clone — so the client must release it), which is why `onProgress` and payloads stop instantly. On *normal* completion the link does not unregister: Tauri sends `{end: true}` when the backend's last Channel clone drops and the JS Channel unregisters itself (unregistering first would make Tauri warn `Couldn't find callback id` after every transfer). Long-running commands can check `on_event.closed()` themselves if they want to short-circuit production.
 - `tauri.timeout` and `signal` compose: whichever fires first wins (inactivity timeout → `"TIMEOUT"`, abort → `"CLIENT_CLOSED_REQUEST"`).
 - React: wire the component's `AbortController` to `useEffect` cleanup or a Cancel button.
 
@@ -670,6 +671,71 @@ Guarantees:
 - `getEventMeta()` on data envelopes is unchanged
 - Channel transports only: listen-mode (SSE events) streams do not consume progress envelopes
 
+### Resource-Backed Streams (`tauri.resource`)
+
+Long-running stream commands can register a handle in **Tauri's resource table** and announce it as a data-less control envelope — `comment: "handle:<rid>"` (Rust builder: `Event::default().handle(rid)`). The link swallows it and, with the default `autoClose`, **closes the resource when the stream exits abnormally** — consumer abort, failure, or early exit. Closing runs Rust's `Resource::close`, which is your one-line server-side cancellation hook.
+
+**Rust side** — a `#[tauri::command]` with `use tauri::{AppHandle, Manager, Resource, ResourceId}`:
+
+```rust
+pub struct TransferHandle { token: Arc<AtomicBool> }
+
+impl Resource for TransferHandle {
+    fn name(&self) -> Cow<'_, str> { "TransferHandle".into() }
+    // Runs the moment the rid is closed — from the link's autoClose teardown,
+    // link.resource.close(handle), or Rust's resources_table().close(rid).
+    fn close(self: Arc<Self>) { self.token.store(true, Ordering::Release); }
+}
+
+#[tauri::command]
+pub async fn resource_file_download(
+    input: DownloadInput,
+    app: AppHandle,
+    on_event: Channel<Event>,
+) -> Result<usize, AppError> {
+    let token = Arc::new(AtomicBool::new(false));
+    let rid = app.resources_table().add(TransferHandle { token: token.clone() });
+
+    on_event.send(Event::default().comment("flush"))?;         // establish connection
+    on_event.send(Event::default().handle(rid))?;              // handle:<rid>, exactly once
+    tauri::async_runtime::spawn(async move {
+        while sent < total && !token.load(Ordering::Acquire) { /* chunk + progress */ }
+        if token.load(Ordering::Acquire) { return; }            // cancelled: no `done`
+        let _ = app.resources_table().close(rid);               // completion: drop own rid
+        let _ = on_event.send(Event::default().event("done"));
+    });
+    Ok(total)
+}
+```
+
+**TypeScript side** — mark the procedure and work with the typed handle:
+
+```typescript
+import { asResourceHandle, type RustResourceHandle } from "@sabryio/orpc-tauri/link";
+
+resource_file_download: oc
+  .meta(tauri.channel("on_event"), tauri.resource())
+  .input(/* input */)
+  .output(asyncIteratorObject(ChunkSchema)),
+
+// The wire format is a plain { rid: number }; the brand is compile-time only.
+const handle = asResourceHandle(rid as number); // widen a raw payload when needed
+
+// Manual close (the facade mirrors `@tauri-apps/api/core` Resource.close,
+// inside the same Effect pipeline):
+await link.resource.close(handle);
+```
+
+Lifecycle guarantees:
+
+- The `handle:<rid>` envelope is announced exactly once (by the producer); the link keeps the **first** announcement and swallows malformed or duplicate ones
+- **Auto-close fires on abnormal exits only**: consumer abort (`signal`), stream failure, or early consumer exit (`.return()` / `break`); a **normal completion never auto-closes** — the Rust side owns its lifecycle (the worker removes its own resource via `resources_table().close(rid)`)
+- `tauri.resource({ autoClose: false })` makes the resource fully manual
+- Auto-close is **best-effort**: close failures never mask the stream's own exit cause; no envelope ⇒ zero behavior change
+- Works in both transports (channel and listen); the close invoke uses the `plugin:resources|close` IPC (`core:resources:allow-close`, enabled by Tauri's default permission set)
+- If the abort lands before the first chunk arrives, no rid has been announced — nothing to close, nothing leaks (the Rust task finishes on its own)
+- Unary procedures may carry `tauri.resource()` too — it's a no-op for the link lifecycle (close stays manual via the facade)
+
 ---
 
 ## Metadata API
@@ -711,6 +777,11 @@ tauri.channel();
 // Or specify the custom Rust parameter name — snake_case or camelCase,
 // both work (normalized internally, since Tauri IPC keys args in camelCase)
 tauri.channel("custom_param"); // sends over IPC as `customParam`
+
+// Rust-resource-backed streaming (see "Resource-Backed Streams" above):
+// the command announces handle:<rid>; autoClose closes it on abnormal exit
+tauri.resource();
+tauri.resource({ autoClose: false }); // fully manual resource lifecycle
 ```
 
 ### Transport (raw config)
@@ -881,6 +952,11 @@ import { tauri } from "@sabryio/orpc-tauri/meta";
 import { TauriLink, ConsoleLogger, NoopLogger } from "@sabryio/orpc-tauri/link";
 import type { ProgressInfo } from "@sabryio/orpc-tauri/link";
 import { PROGRESS_PREFIX } from "@sabryio/orpc-tauri/link";
+
+// Rust resources (Tauri Resource protocol)
+import { asResourceHandle, HANDLE_PREFIX, parseHandleEnvelope } from "@sabryio/orpc-tauri/link";
+import type { RustResourceHandle } from "@sabryio/orpc-tauri/link";
+// link.resource.close(handle) — the facade on TauriLink (see above)
 
 // Types
 import type { TauriLinkOptions, SimpleLogger } from "@sabryio/orpc-tauri/link";

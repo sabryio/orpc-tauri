@@ -34,17 +34,22 @@ export {
 } from "./errors";
 // Link module - TauriLink class and related types
 export { TauriLink } from "./public-api";
+export type { RustResourceHandle } from "./resource-handle";
+// Rust resource handles (Tauri Resource protocol)
+export { asResourceHandle } from "./resource-handle";
 // Invoker utilities
 export type { InvokeFn } from "./services/invoker";
 export type { SimpleLogger } from "./services/logger";
 // Logger utilities
 export { ConsoleLogger, NoopLogger } from "./services/logger";
+export { closeResource, RESOURCE_CLOSE_COMMAND } from "./services/resource";
 export type {
 	EventNameStrategy,
 	StreamEventNames,
 } from "./streaming/event-name-strategy";
 // Event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+export { HANDLE_PREFIX, parseHandleEnvelope } from "./streaming/handle";
 export { PROGRESS_PREFIX } from "./streaming/progress";
 // Transfer progress (channel streams)
 export type {

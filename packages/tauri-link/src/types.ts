@@ -41,7 +41,24 @@ export interface TauriMeta {
 	 * the window (a slow but steady stream is never cut).
 	 */
 	timeout?: number;
+	/**
+	 * Marks a procedure as Rust-resource-backed (`tauri.resource()` meta).
+	 *
+	 * For streaming procedures with the default `autoClose: true`, the link
+	 * closes the announced `handle:<rid>` resource when the stream exits
+	 * abnormally (consumer abort/failure/early exit) — server-side teardown.
+	 * Normal completion never auto-closes: the Rust side owns its lifecycle.
+	 */
+	resource?: TauriResourceConfig;
 	debug?: boolean;
+}
+
+export interface TauriResourceConfig {
+	/**
+	 * Close the announced `handle:<rid>` resource on abnormal stream exits.
+	 * Default `true`. `false` keeps the Rust resource fully manual.
+	 */
+	autoClose?: boolean;
 }
 
 export interface MetaPlugin {

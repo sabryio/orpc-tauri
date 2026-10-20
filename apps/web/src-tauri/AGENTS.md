@@ -14,6 +14,7 @@ Rust backend for the Tauri desktop app. Implements oRPC contract commands, dual 
 | src/commands/stream.rs           | SSE event streaming via Tauri event system                |
 | src/commands/channel_stream.rs   | Channel streaming via Tauri IPC channels                  |
 | src/commands/file.rs             | File upload (unary) and download demo (channel + progress) |
+| src/commands/resource.rs         | Resource protocol demo: db_open/db_query/db_close + cancellable resource_file_download |
 | src/broadcast.rs                 | SSE Event builder (event/id/retry/comment/data/progress) for streaming  |
 | src/types/models.rs              | Domain models (PingResponse, Planet)                      |
 | src/types/errors.rs              | AppError with serialization for IPC                       |
@@ -42,6 +43,8 @@ cargo tauri build
 - SSE streaming: emit events via `app.emit()`, listen on frontend via event names
 - Channel streaming: accept `Channel<Event<T>>` parameter, send via `channel.send()`
 - Transfer progress: send data-less `Event::default().progress(read, total)` envelopes via channels (throttled, every N chunks); always end channel streams with a `done` event
+- Resource-backed stream commands (`tauri.resource()` meta): register the task handle in `app.resources_table()` (AppHandle param via `tauri::Manager`), announce it once with `Event::default().handle(rid)`, poll the cancel token in the loop, and drop the own rid (`resources_table().close(rid)`) on normal completion — no `done` after a cancel
+- Resource close is the server-side cancellation hook: implement `Resource::close(self)` to cancel pending work (see `commands/resource.rs`: `DatabaseConn`, `TransferHandle`)
 - Errors use thiserror for derive, serialize to JSON with code and message
 - Async runtime via `tauri::async_runtime::spawn` for background tasks
 

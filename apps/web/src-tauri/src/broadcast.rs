@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, ResourceId};
 
 /// Global SSE event names (matches GLOBAL_EVENT_NAMES in tauri-link/constants.ts)
 pub mod event_names {
@@ -92,6 +92,17 @@ impl Event {
     /// Throttle sending — one progress envelope per N chunks is plenty.
     pub fn progress(self, bytes_read: u64, total_bytes: u64) -> Self {
         self.comment(format!("progress:{bytes_read}/{total_bytes}"))
+    }
+
+    /// Meta-only resource handle announcement (`:handle:<rid>`)
+    ///
+    /// Resource-backed streams (`tauri.resource()` meta) announce their task
+    /// handle exactly once: the envelope carries no data field, so it never
+    /// reaches the consumer's Zod payload schema. The link swallows it and —
+    /// with the default autoClose — closes the rid when the consumer
+    /// aborts/fails/leaves the stream early.
+    pub fn handle(self, rid: ResourceId) -> Self {
+        self.comment(format!("handle:{rid}"))
     }
 
     /// Set the event's data field (`data: <content>`)

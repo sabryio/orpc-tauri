@@ -28,4 +28,7 @@ const link = new TauriLink(contract, {
 
 export const client: RouterContractClient<Contract> = createORPCClient(link);
 
+// Exposed for resource lifecycle demos (`link.resource.close(handle)`).
+export { link };
+
 export const orpc = createTanstackQueryUtils(client);

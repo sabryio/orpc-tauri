@@ -156,14 +156,21 @@ describe("EffectTauriLink", () => {
 				onmessage: null as ((msg: unknown) => void) | null,
 			};
 
+			const invocations: { command: string; args?: Record<string, unknown> }[] =
+				[];
+
 			const mockInvoker = Layer.succeed(
 				TauriInvoker,
 				TauriInvoker.of({
-					invoke: <T>() =>
-						// Emit one message, then go silent forever (simulating an
-						// ongoing command the consumer cancels)
+					invoke: <T>(command: string, args?: Record<string, unknown>) =>
+						// Emit the resource announcement + one message, then go silent
+						// forever (simulating an ongoing command the consumer cancels)
 						Effect.sync(() => {
-							mockChannel.onmessage?.({ event: "message", data: "chunk-1" });
+							invocations.push({ command, args });
+							if (command === "streamy_command") {
+								mockChannel.onmessage?.({ comment: "handle:77" });
+								mockChannel.onmessage?.({ event: "message", data: "chunk-1" });
+							}
 							return null as T;
 						}) as unknown as Effect.Effect<T>,
 				}),
@@ -198,6 +205,7 @@ describe("EffectTauriLink", () => {
 					mode: "channel",
 					channelParam: "onEvent",
 					signal: controller.signal,
+					resource: { autoClose: true },
 				},
 				mockLayer,
 			);
@@ -213,8 +221,97 @@ describe("EffectTauriLink", () => {
 				message: "Request aborted",
 			});
 
+			// Give the Scope finalizer a tick to run the resource close
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			// Consumer abort ⇒ server-side teardown: the rid announced via
+			// `handle:77` was closed through the Tauri resource protocol
+			expect(invocations).toContainEqual({
+				command: "plugin:resources|close",
+				args: { rid: 77 },
+			});
+
 			// Subsequent pulls see a dead stream (done — not hung)
 			await expect(iterator.next()).resolves.toMatchObject({ done: true });
+		});
+
+		it("closes the announced resource when the consumer exits early (.return())", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+			};
+
+			const invocations: { command: string; args?: Record<string, unknown> }[] =
+				[];
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>(command: string, args?: Record<string, unknown>) =>
+						Effect.sync(() => {
+							invocations.push({ command, args });
+							if (command === "streamy_command") {
+								mockChannel.onmessage?.({ comment: "handle:13" });
+								mockChannel.onmessage?.({ event: "message", data: "chunk-1" });
+								// Keep the stream fiber alive (like a real Rust worker):
+								// late chunks arrive long after the consumer breaks out.
+								setTimeout(() => {
+									mockChannel.onmessage?.({
+										event: "message",
+										data: "chunk-2",
+									});
+									mockChannel.onmessage?.({ event: "done" });
+								}, 500);
+							}
+							return null as T;
+						}) as unknown as Effect.Effect<T>,
+				}),
+			);
+
+			const mockListener = Layer.succeed(
+				TauriListener,
+				TauriListener.of({
+					listen: () => Effect.void,
+				}),
+			);
+
+			const mockChannelFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: <T>() => Effect.succeed(mockChannel as unknown as T),
+				}),
+			);
+
+			const mockLayer = Layer.mergeAll(
+				mockInvoker,
+				mockListener,
+				mockChannelFactory,
+			);
+
+			const iterator = EffectTauriLink.stream<unknown, string>(
+				"streamy_command",
+				{},
+				{
+					mode: "channel",
+					channelParam: "onEvent",
+					resource: { autoClose: true },
+				},
+				mockLayer,
+			);
+
+			// Consumer takes one value then breaks out of the for-await loop
+			expect(await iterator.next()).toMatchObject({ value: "chunk-1" });
+			await iterator.return?.();
+
+			// reader.cancel() → scope teardown → finalizer runs asynchronously;
+			// poll until the resource close lands
+			await expect
+				.poll(() => invocations.length > 1, { timeout: 2000 })
+				.toBe(true);
+
+			expect(invocations).toContainEqual({
+				command: "plugin:resources|close",
+				args: { rid: 13 },
+			});
 		});
 	});
 });

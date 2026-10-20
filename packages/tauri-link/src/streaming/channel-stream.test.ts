@@ -1,5 +1,5 @@
 import type { Channel } from "@tauri-apps/api/core";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Exit, Layer, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 import { TauriChannelFactory } from "../services/channel-factory";
 import { TauriInvoker } from "../services/invoker";
@@ -346,7 +346,7 @@ describe("createChannelStream", () => {
 				{ bytesTransferred: 40, totalBytes: 80, percentage: 50 },
 			]);
 		});
-		it("tears the channel pipeline down when the stream exits (cancellation safety)", async () => {
+		it("does not unregister on success — Tauri's own `{end}` envelope owns that cleanup", async () => {
 			const mockChannel = {
 				onmessage: null as ((msg: unknown) => void) | null,
 				cleanupCallback: () => {
@@ -392,14 +392,186 @@ describe("createChannelStream", () => {
 				),
 			);
 
-			// Simulate a Rust envelope arriving AFTER teardown (e.g. the backend
-			// keeps emitting for a cancelled stream): the finalizer's no-op
+			// Simulate a Rust envelope arriving AFTER teardown (the `{end}`
+			// envelope's trailing data can still land): the finalizer's no-op
 			// onmessage must swallow it — no onProgress, no yields.
 			mockChannel.onmessage?.({ comment: "progress:99/100" });
 
 			expect(Array.from(results)).toEqual(["chunk"]);
 			expect(progress).toEqual([]);
+
+			// Success exit: Tauri sends `{ end: true }` when the backend's last
+			// Channel clone drops, and the JS Channel unregisters itself then.
+			// Unregistering here first makes Tauri warn
+			// `Couldn't find callback id` on every normal completion.
+			expect(cleanupCalled).toBe(false);
+		});
+
+		it("unregisters the IPC callback on abnormal exit (no `end` can come)", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+				cleanupCallback: () => {
+					cleanupCalled = true;
+				},
+			} as unknown as Channel<unknown>;
+
+			let cleanupCalled = false;
+
+			const mockFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: () => Effect.succeed(mockChannel),
+				}),
+			);
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>() =>
+						Effect.sync(() => {
+							// Rust emits one chunk, then the command fails — the
+							// stream fails, no `done`/`end` follows.
+							mockChannel.onmessage?.({ event: "message", data: "chunk" });
+							mockChannel.onmessage?.({ event: "error", error: "boom" });
+							return null as T;
+						}),
+				}),
+			);
+
+			const stream = createChannelStream<string>("test_command", {}, "onEvent");
+
+			const exit = await Effect.runPromiseExit(
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
+					Effect.scoped,
+				),
+			);
+
+			expect(Exit.isFailure(exit)).toBe(true);
+
+			// Abnormal exit: Rust is still holding its channel clone — no `{end}`
+			// envelope will ever arrive — so the finalizer must unregister now.
 			expect(cleanupCalled).toBe(true);
+		});
+	});
+
+	describe("rust resources (tauri.resource)", () => {
+		interface CloseCall {
+			command: string;
+			args?: Record<string, unknown>;
+		}
+
+		const makeChannel = () =>
+			({
+				onmessage: null as ((msg: unknown) => void) | null,
+			}) as unknown as Channel<unknown>;
+
+		const runStream = async (
+			channel: Channel<unknown>,
+			invokeScript: (command: string) => void,
+			resource?: { readonly autoClose?: boolean },
+		): Promise<{ closes: CloseCall[] }> => {
+			const closes: CloseCall[] = [];
+
+			const mockFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: () => Effect.succeed(channel),
+				}),
+			);
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>(command: string, args?: Record<string, unknown>) => {
+						if (command === "plugin:resources|close") {
+							closes.push({ command, args });
+							return Effect.succeed(null as T);
+						}
+						invokeScript(command);
+						return Effect.succeed(null as T);
+					},
+				}),
+			);
+
+			const stream = createChannelStream<string>(
+				"test_command",
+				{},
+				"onEvent",
+				undefined,
+				undefined,
+				resource,
+			);
+
+			await Effect.runPromiseExit(
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
+					Effect.scoped,
+				),
+			);
+
+			return { closes };
+		};
+
+		it("closes the announced rid when the stream fails", async () => {
+			const channel = makeChannel();
+			const { closes } = await runStream(channel, () => {
+				channel.onmessage?.({ comment: "handle:42" });
+				channel.onmessage?.({ event: "error", error: new Error("boom") });
+			});
+
+			expect(closes).toEqual([
+				{ command: "plugin:resources|close", args: { rid: 42 } },
+			]);
+		});
+
+		it("never closes on normal completion (done) — Rust owns its lifecycle", async () => {
+			const channel = makeChannel();
+			const { closes } = await runStream(channel, () => {
+				channel.onmessage?.({ comment: "handle:42" });
+				channel.onmessage?.({ event: "message", data: "chunk" });
+				channel.onmessage?.({ event: "done" });
+			});
+
+			expect(closes).toEqual([]);
+		});
+
+		it("first announcement wins (duplicates ignored)", async () => {
+			const channel = makeChannel();
+			const { closes } = await runStream(channel, () => {
+				channel.onmessage?.({ comment: "handle:42" });
+				channel.onmessage?.({ comment: "handle:99" });
+				channel.onmessage?.({ event: "error", error: new Error("boom") });
+			});
+
+			expect(closes).toEqual([
+				{ command: "plugin:resources|close", args: { rid: 42 } },
+			]);
+		});
+
+		it("autoClose: false keeps the resource fully manual", async () => {
+			const channel = makeChannel();
+			const { closes } = await runStream(
+				channel,
+				() => {
+					channel.onmessage?.({ comment: "handle:42" });
+					channel.onmessage?.({ event: "error", error: new Error("boom") });
+				},
+				{ autoClose: false },
+			);
+
+			expect(closes).toEqual([]);
+		});
+
+		it("no handle announcement → close never invoked (backward compatible)", async () => {
+			const channel = makeChannel();
+			const { closes } = await runStream(channel, () => {
+				channel.onmessage?.({ event: "error", error: new Error("boom") });
+			});
+
+			expect(closes).toEqual([]);
 		});
 	});
 });

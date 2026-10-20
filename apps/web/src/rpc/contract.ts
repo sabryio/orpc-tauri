@@ -9,6 +9,15 @@ const PlanetSchema = z.object({
 });
 
 // ============================================================================
+// Resource Handles - Rust resource table refs (Tauri Resource protocol)
+// ============================================================================
+
+// Wire format is a plain `{ rid }` — matching `RustResourceHandle` from
+// `orpc-tauri` (the brand there is compile-time only, never serialized).
+const ResourceRefSchema = z.object({ rid: z.number().int().min(0) });
+const ResourceHandleSchema = ResourceRefSchema;
+
+// ============================================================================
 // SSE Event Types - Discriminated Union matching Rust AppEvent enum
 // ============================================================================
 
@@ -185,6 +194,43 @@ export const contract = {
 		download_file: oc
 			.meta(
 				tauri.channel("on_event"), // Rust command param, verbatim — normalized over IPC
+				tauri.resource(), // Announces handle:<rid>; autoClose on abnormal stream exit
+			)
+			.input(
+				z.object({
+					input: z.object({
+						total_bytes: z.number().int().optional(), // Defaults to 256 KiB in Rust (capped at 2 MB)
+					}),
+				}),
+			)
+			.output(asyncIteratorObject(FileChunkSchema)),
+	},
+	resource: {
+		db_open: oc
+			.meta(tauri.resource())
+			.input(z.object({ input: z.object({ path: z.string().min(1) }) }))
+			.output(ResourceRefSchema)
+			.errors(StandardApiErrors),
+		db_query: oc
+			.meta(tauri.resource())
+			.input(
+				z.object({
+					input: z.object({
+						handle: ResourceHandleSchema,
+						sql: z.string().min(1),
+					}),
+				}),
+			)
+			.output(z.array(PlanetSchema))
+			.errors(StandardApiErrors),
+		db_close: oc
+			.input(z.object({ input: z.object({ handle: ResourceHandleSchema }) }))
+			.output(z.void())
+			.errors(StandardApiErrors),
+		resource_file_download: oc
+			.meta(
+				tauri.channel("on_event"), // Rust command param, verbatim — normalized over IPC
+				tauri.resource(), // handle:<rid> → JS-cancelable server-side transfer
 			)
 			.input(
 				z.object({

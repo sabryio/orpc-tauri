@@ -24,6 +24,7 @@ export async function* streamToAsyncIterator<T, E>(
 
 	// Get the reader
 	const reader = readableStream.getReader();
+	let finished = false;
 
 	try {
 		while (true) {
@@ -31,9 +32,19 @@ export async function* streamToAsyncIterator<T, E>(
 			if (done) break;
 			yield value;
 		}
+		finished = true;
 	} catch (error) {
 		throw toORPCError(error);
 	} finally {
-		reader.releaseLock();
+		// Consumer exited without completion (break / .return()): cancel the
+		// readable stream so the Effect stream's Scope tears down — which is
+		// what unlistens listeners, unregisters channels, and (for
+		// resource-backed streams) closes the announced Rust resource.
+		// Completed streams just release the lock.
+		if (!finished) {
+			reader.cancel().catch(() => {});
+		} else {
+			reader.releaseLock();
+		}
 	}
 }

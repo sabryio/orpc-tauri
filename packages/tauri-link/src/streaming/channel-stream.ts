@@ -1,10 +1,16 @@
-import { Effect, type Stream } from "effect";
+import { Effect, Exit, type Stream } from "effect";
 import type { StreamError } from "../errors";
 import { TauriChannelFactory } from "../services/channel-factory";
 import type { TauriInvoker } from "../services/invoker";
 import { parseProgress } from "./progress";
 import type { ProgressInfo } from "./progress-types";
-import { createQueueStream, forkInvoke } from "./stream-utils";
+import {
+	captureHandleAnnouncement,
+	createQueueStream,
+	forkInvoke,
+	type ResourceRidSlot,
+	resourceTeardown,
+} from "./stream-utils";
 
 /**
  * SSE event payload structure from Tauri channels.
@@ -36,10 +42,15 @@ export const createChannelStream = <T>(
 	paramName: string,
 	onProgress?: (info: ProgressInfo) => void,
 	progressParser?: (comment: string) => ProgressInfo | undefined,
+	resource?: { readonly autoClose?: boolean },
 ): Stream.Stream<T, StreamError, TauriInvoker | TauriChannelFactory> =>
 	createQueueStream<T, TauriInvoker | TauriChannelFactory>((emit) =>
 		Effect.gen(function* () {
 			const factory = yield* TauriChannelFactory;
+
+			// Rust-resource lifecycle: capture the `handle:<rid>` announcement
+			// (first envelope wins) for the Scope teardown finalizer below.
+			const ridSlot: ResourceRidSlot = {};
 
 			const channel = yield* factory.createChannel<SseEvent<T>>();
 
@@ -47,21 +58,35 @@ export const createChannelStream = <T>(
 			// stop the pipeline first so late envelopes can't reach the consumer
 			// (onProgress or the queue), then unregister the underlying Tauri
 			// invoke callback so Rust keeps sending into a dead channel.
-			// Tauri only tears a channel down when the backend sends `end` — a
-			// cancelled stream has no `end`, so the client must do it here.
-			yield* Effect.addFinalizer(() =>
-				Effect.sync(() => {
+			//
+			// Unregistering is only needed on ABNORMAL exits: Tauri itself sends
+			// a `{ end: true }` envelope when the backend's last Channel clone
+			// drops (command completion), and the JS Channel then unregisters
+			// its own callback in order. Unregistering before that envelope
+			// arrives steals the cleanup and makes Tauri warn
+			// `Couldn't find callback id` after every normal completion. On an
+			// abnormal exit (abort, failure, early `.return()`) no `end` can
+			// ever come — Rust is still running — so the client must do it here.
+			yield* Effect.addFinalizer((exit) =>
+				Effect.gen(function* () {
 					channel.onmessage = () => {};
-					const cleanup = (
-						channel as unknown as { cleanupCallback?: () => void }
-					).cleanupCallback;
-					if (typeof cleanup === "function") {
-						try {
-							cleanup.call(channel);
-						} catch {
-							// Callback already gone (e.g. Rust sent `end`) — nothing to do.
+					if (Exit.isFailure(exit)) {
+						const cleanup = (
+							channel as unknown as { cleanupCallback?: () => void }
+						).cleanupCallback;
+						if (typeof cleanup === "function") {
+							try {
+								cleanup.call(channel);
+							} catch {
+								// Callback already gone (e.g. Rust sent `end`) — nothing to do.
+							}
 						}
 					}
+
+					// Resource-backed streams: on abnormal exit (abort, failure,
+					// early `.return()`), close the announced rid — cancels the
+					// Rust task. Normal completion: Rust owns its lifecycle.
+					yield* resourceTeardown(ridSlot, resource, exit);
 				}),
 			);
 
@@ -73,11 +98,16 @@ export const createChannelStream = <T>(
 					emit.error(msg.error ?? msg);
 				} else if (msg.event === "done") {
 					emit.done();
-				} else if (onProgress !== undefined && msg.comment) {
-					const info = progressParser
-						? progressParser(msg.comment)
-						: parseProgress(msg.comment);
-					if (info) onProgress(info);
+				} else if (msg.comment) {
+					// Control envelopes: `handle:<rid>` first (never yielded),
+					// then progress. Unknown comments stay swallowed.
+					if (captureHandleAnnouncement(msg.comment, ridSlot)) return;
+					if (onProgress !== undefined) {
+						const info = progressParser
+							? progressParser(msg.comment)
+							: parseProgress(msg.comment);
+						if (info) onProgress(info);
+					}
 				}
 			};
 

@@ -2,7 +2,12 @@ import { Effect } from "effect";
 import { METADATA_KEYS, ORPC_SYMBOLS } from "../constants";
 import { MissingCommandMetadataError, ProcedureNotFoundError } from "../errors";
 import { extractTauriMeta } from "../metadata";
-import type { Contract, ORPCMeta, TauriTransportConfig } from "../types";
+import type {
+	Contract,
+	ORPCMeta,
+	TauriResourceConfig,
+	TauriTransportConfig,
+} from "../types";
 
 /**
  * Resolves procedure metadata from contract paths.
@@ -124,6 +129,18 @@ export class ProcedureResolver {
 
 		const tauriMeta = extractTauriMeta(procedure);
 		return tauriMeta?.timeout;
+	}
+
+	/**
+	 * Get resource lifecycle configuration, from `tauri.resource()` meta.
+	 * Undefined means the procedure is not resource-backed (no auto-close).
+	 */
+	getResource(path: readonly string[]): TauriResourceConfig | undefined {
+		const procedure = this.resolve(path);
+		if (!procedure) return undefined;
+
+		const tauriMeta = extractTauriMeta(procedure);
+		return tauriMeta?.resource;
 	}
 
 	/**

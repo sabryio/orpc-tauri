@@ -18,15 +18,23 @@ export {
 // Export metadata utilities
 export { extractTauriMeta, tauri } from "./metadata";
 export { TauriLink } from "./public-api";
+export type { RustResourceHandle } from "./resource-handle";
+/**
+ * Rust resource handles (Tauri Resource protocol). See `RustResourceHandle`
+ * and the `tauri.resource()` metadata helper for lifecycle details.
+ */
+export { asResourceHandle } from "./resource-handle";
 export type { SimpleLogger } from "./services/logger";
 // Export simple logger classes and type
 export { ConsoleLogger, NoopLogger } from "./services/logger";
+export { closeResource, RESOURCE_CLOSE_COMMAND } from "./services/resource";
 export type {
 	EventNameStrategy,
 	StreamEventNames,
 } from "./streaming/event-name-strategy";
 // Export event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+export { HANDLE_PREFIX, parseHandleEnvelope } from "./streaming/handle";
 export { PROGRESS_PREFIX } from "./streaming/progress";
 export type {
 	ChannelProgressConfig,

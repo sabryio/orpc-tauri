@@ -24,6 +24,7 @@ function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
 		command: incoming.command ?? current?.command,
 		transport: incoming.transport ?? current?.transport,
 		timeout: incoming.timeout ?? current?.timeout,
+		resource: incoming.resource ?? current?.resource,
 		debug: incoming.debug ?? current?.debug,
 	};
 }
@@ -49,6 +50,7 @@ export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
 		progress?: Extract<TauriTransportConfig, { kind: "channel" }>["progress"],
 	): MetaPlugin;
 	timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
+	resource(config?: NonNullable<TauriMeta["resource"]>): MetaPlugin;
 	debug(debug: TauriMeta["debug"]): MetaPlugin;
 };
 
@@ -104,6 +106,17 @@ tauri.channel = (id?: { name: string } | string, progress?): MetaPlugin => {
 };
 
 tauri.timeout = (timeout): MetaPlugin => tauri({ timeout });
+
+/**
+ * Marks a procedure as Rust-resource-backed (Tauri Resource protocol).
+ *
+ * For streaming procedures the Rust command announces its task handle with a
+ * data-less `handle:<rid>` control envelope; with the default `autoClose`,
+ * the link closes that resource when the stream exits abnormally (consumer
+ * abort, failure, or early exit) — server-side cancellation in ~10 Rust lines.
+ * See `parseHandleEnvelope` (`streaming/handle.ts`) for the wire convention.
+ */
+tauri.resource = (config): MetaPlugin => tauri({ resource: config ?? {} });
 
 tauri.debug = (debug): MetaPlugin => tauri({ debug });
 

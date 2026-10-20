@@ -29,5 +29,6 @@ export { extractTauriMeta, tauri } from "./metadata";
 export type {
 	MetaPlugin,
 	TauriMeta,
+	TauriResourceConfig,
 	TauriTransportConfig,
 } from "./types";
