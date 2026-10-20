@@ -24,6 +24,11 @@ use tauri::{AppHandle, Manager, Resource, ResourceId};
 /// (256 KiB / 32 KiB = 8 chunks ≈ 6 s of transfer).
 const RESOURCE_DEMO_DELAY: Duration = Duration::from_millis(750);
 
+/// The pause between chunks is awaited in ticks of this length, polling the
+/// cancel token each tick. A `Resource::close` mid-transfer is therefore
+/// noticed within ~50 ms — not only at the next chunk boundary.
+const CANCEL_POLL_TICK: Duration = Duration::from_millis(50);
+
 /// Wire reference to a Rust-owned resource. Never add fields — the JS side
 /// types this as `RustResourceHandle` (a plain `{ rid: number }`).
 #[derive(Debug, Serialize, Clone, Copy)]
@@ -274,7 +279,18 @@ pub async fn resource_file_download(
                 return;
             }
 
-            tokio::time::sleep(RESOURCE_DEMO_DELAY).await;
+            // Pacing, awaited in small ticks so a mid-transfer cancel is
+            // noticed by the CANCEL_POLL_TICK, not at the next chunk
+            // boundary — the loop above re-polls before the next chunk.
+            let mut remaining = RESOURCE_DEMO_DELAY;
+            while !remaining.is_zero() {
+                if token.load(Ordering::Acquire) {
+                    break;
+                }
+                let step = remaining.min(CANCEL_POLL_TICK);
+                tokio::time::sleep(step).await;
+                remaining -= step;
+            }
         }
 
         // 5. Cancel-at-the-tail race: the consumer aborted while the final

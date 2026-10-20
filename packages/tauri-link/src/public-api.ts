@@ -293,9 +293,15 @@ export class TauriLink<TContext = unknown> {
 		) => Promise<void>;
 	} {
 		return {
+			// Rejects on failure (converted to ORPCError like every other
+			// boundary) — a failed close leaves the Rust task running, so a
+			// silent "successful" close would be a lie.
 			close: async (handle): Promise<void> => {
 				await Effect.runPromise(
-					closeResource(handle).pipe(Effect.provide(this.appLayer)),
+					closeResource(handle).pipe(
+						Effect.mapError(toORPCError),
+						Effect.provide(this.appLayer),
+					),
 				);
 			},
 		};

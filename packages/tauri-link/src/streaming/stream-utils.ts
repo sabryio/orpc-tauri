@@ -125,8 +125,10 @@ export const captureHandleAnnouncement = (
  * the announced Rust resource is closed server-side: `Resource.close`
  * cancels the Rust task via its owning token.
  *
- * Best-effort: close failures are swallowed at this level, so they can
- * never mask the stream's own exit cause.
+ * Best-effort, but never silent: a failed close leaves the Rust task
+ * running, so the failure is logged loudly with its cause and the most
+ * common fix (capability grant). The stream's own exit cause is preserved —
+ * this must not mask it, so the finalizer error channel stays `never`.
  */
 export const resourceTeardown = (
 	slot: ResourceRidSlot,
@@ -140,5 +142,27 @@ export const resourceTeardown = (
 	if (Exit.isSuccess(exit)) return Effect.void;
 	if (slot.rid === undefined) return Effect.void;
 
-	return closeResource(slot.rid);
+	return closeResource(slot.rid).pipe(
+		Effect.catch((error) =>
+			Effect.sync(() => {
+				const cause = describeCloseError(error);
+				console.error(
+					`[tauri-link] Failed to close Rust resource rid=${slot.rid} (Rust task was NOT cancelled — it keeps running). Cause: ${cause} Most common fix: add "core:resources:allow-close" to the app's src-tauri/capabilities/*.json.`,
+				);
+			}),
+		),
+	);
+};
+
+/**
+ * One-line diagnostic text for a failed `plugin:resources|close` invoke
+ * (the cause is what makes these failures diagnosable): `TauriInvokeError`
+ * wraps Tauri's own message (e.g. `resources.close not allowed. …`).
+ */
+const describeCloseError = (error: unknown): string => {
+	if (typeof error === "object" && error !== null && "cause" in error) {
+		return `TauriInvokeError: ${String((error as { cause: unknown }).cause)}`;
+	}
+	if (error instanceof Error) return error.message;
+	return String(error);
 };
