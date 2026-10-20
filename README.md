@@ -1,120 +1,172 @@
 # Tauri oRPC Contract
 
-Type-safe RPC between TypeScript and Rust using [oRPC](https://orpc.unnoq.com/) contracts. Demonstrates contract-first architecture with dual streaming transports (SSE events and Tauri channels) in a Tauri 2 desktop application.
+**Type-safe RPC between TypeScript and Rust for Tauri desktop apps.**
 
-## Features
+Define your API once as an oRPC contract with Zod schemas and get end-to-end type safety across the IPC boundary — including streaming, with zero code generation.
 
-- **oRPC Contracts** - Zod schemas define the API surface, types flow to both frontend and backend
-- **Custom Tauri Link** - oRPC link implementation bridges contracts to Tauri IPC
-- **Dual Streaming** - SSE event streaming and Tauri channel streaming in one contract
-- **React 19** - Modern React with TanStack Router and TanStack Query
-- **TypeScript + Rust** - Type safety across the IPC boundary
-- **Bun Workspaces** - Monorepo with shared packages
-- **Tailwind CSS 4** - Latest Tailwind with CSS-first configuration
-- **shadcn/ui** - Shared component library in `packages/ui`
+Built on [oRPC](https://orpc.unnoq.com/) and [Tauri 2](https://v2.tauri.app/), powered by the [`tauri-link`](./packages/tauri-link) — a custom oRPC link bridge, also published as [`@sabryio/orpc-tauri`](https://jsr.io/@sabryio/orpc-tauri) on JSR.
+
+---
+
+<div align="center">
+
+[Capabilities](#key-capabilities) · [Quick Start](#quick-start) · [Contract Design](#contract-design) · [Architecture](#architecture) · [Scripts](#scripts) · [Docs](#documentation)
+
+</div>
+
+---
+
+## Key Capabilities
+
+| | |
+| ------------------------------ | ------------------------------------------------------------------------ |
+| 🔗 **Contract-first**          | One source of truth; types flow to React, TanStack Query, and Rust       |
+| ⚡ **Zero code generation**    | The contract *is* the client — no generators, no drift                   |
+| 🎯 **Convention over config**  | Route keys are the Rust command names, verbatim                          |
+| 📡 **Dual streaming**          | Listen-style SSE events **and** Tauri channels, in one contract           |
+| 🛡️ **Typed errors**            | Rust `AppError` maps to typed, contract-defined oRPC errors               |
+| 🏗️ **Resource-safe internals** | Effect-based link with automatic listener cleanup — Promise-based public API |
 
 ## Quick Start
 
-Install dependencies:
+**Prerequisites:** [Bun](https://bun.sh), [Rust](https://rustup.rs), and the [Tauri CLI](https://v2.tauri.app/start/prerequisites/) (`cargo install tauri-cli --version ^2`).
 
 ```bash
 bun install
-```
 
-Run the web app in browser:
+# Web app (frontend only, browser)
+bun dev                   # → http://localhost:3001
 
-```bash
-bun dev
-# or target web only
-bun dev:web
-```
-
-Open [http://localhost:3001](http://localhost:3001).
-
-Run the Tauri desktop app:
-
-```bash
+# Desktop app (starts the Rust backend)
 cd apps/web
 bun desktop:dev
 ```
 
-## Project Structure
+## Contract Design
 
+A contract procedure is defined once and consumed everywhere. **Route keys are the snake_case Rust command names** — the link derives the invoked command from the route path, so standard procedures need no metadata at all:
+
+```ts
+// apps/web/src/rpc/contract.ts
+export const contract = {
+  planet: {
+    // Route key `delete_planet` → invokes Rust command `delete_planet`
+    delete_planet: oc
+      .input(z.object({ input: z.object({ id: z.number().int() }) }))
+      .output(z.void())
+      .errors(StandardApiErrors),
+  },
+};
 ```
-tauri-orpc-contract/
-├── apps/
-│   └── web/                # Tauri desktop app (React frontend + Rust backend)
-│       ├── src/            # TypeScript frontend
-│       │   ├── rpc/        # oRPC contract and client setup
-│       │   └── routes/     # TanStack Router routes
-│       └── src-tauri/      # Rust backend
-│           ├── src/
-│           │   ├── commands/   # Tauri command implementations
-│           │   └── types/      # Domain models and errors
-│           └── Cargo.toml
-├── packages/
-│   ├── tauri-link/         # Custom oRPC link for Tauri IPC
-│   ├── ui/                 # Shared shadcn/ui components
-│   └── config/             # Shared TypeScript config
-└── docs/                   # Implementation guides
+
+```tsx
+// Fully typed — including error shapes
+const mutation = orpc.planet.delete_planet.mutationOptions({
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
+});
 ```
+
+Streaming procedures add one short meta instruction — two transports, same client interface:
+
+```ts
+stream: {
+  stream_events: oc
+    .meta(tauri.listen())           // Broadcast-style SSE events
+    .input(z.void())
+    .output(asyncIteratorObject(AppEventSchema)),
+
+  stream_events_channel: oc
+    .meta(tauri.channel("onEvent")) // Point-to-point Tauri channel
+    .input(z.void())
+    .output(asyncIteratorObject(AppEventSchema)),
+},
+```
+
+Use `tauri.command("override_name")` only when a command name must differ from its route key.
 
 ## Architecture
 
-**Contract-first design**: Define oRPC contracts with Zod schemas in `apps/web/src/rpc/contract.ts`. Types flow to both frontend (via oRPC client) and backend (via contract metadata). Contract route keys are the snake_case Rust command names — the link derives commands from route keys, and `tauri.command(...)` meta is only an explicit override.
+```
+React (TanStack Router + Query)
+        │  orpc client
+        ▼
+┌──────────────────┐        ┌────────────────────────┐
+│ TauriLink        │  IPC   │ Rust (Tauri 2 backend) │
+│ (oRPC link)      │ ─────▶ │ #[tauri::command] fns  │
+│ reads contract   │        │ Result<T, AppError>    │
+│ metadata per call│ ─────▶ │ SSE events / Channels  │
+└──────────────────┘        └────────────────────────┘
+```
 
-**Dual streaming transports**:
-- **SSE events** - `tauri.listen()` with unique event names per stream
-- **Tauri channels** - `tauri.channel()` with Channel type passed as function parameter
+- **Contract-first**: `apps/web/src/rpc/contract.ts` defines the API surface with Zod schemas. Types flow to the frontend via the oRPC client; runtime shapes match Rust through serde.
+- **Derived commands**: `packages/tauri-link` derives the Tauri command from the contract route path — duplicate command names fail at link-construction time.
+- **Dual transports**: the link routes calls based on contract metadata: `tauri.listen()` streams events with unique per-stream event names; `tauri.channel()` passes a native Tauri `Channel` as a function argument.
+- **Error mapping**: Rust `AppError` serializes with `code` + `message`; the link converts them to `ORPCError`, so `isDefinedError()` works for contract-declared errors.
 
-The custom TauriLink (`packages/tauri-link`) reads contract metadata to route calls to the appropriate Tauri command and streaming handler.
+### Project Structure
 
-## Available Scripts
+```
+├── apps/
+│   └── web/                    # Tauri desktop app
+│       ├── src/                #   React frontend — /rpc contract & client, /routes
+│       └── src-tauri/          #   Rust backend — /src/commands, /src/types
+├── packages/
+│   ├── tauri-link/             # oRPC ↔ Tauri IPC link (published to JSR)
+│   ├── ui/                     # Shared shadcn/ui component library
+│   └── config/                 # Shared TypeScript config
+└── docs/                       # Implementation guides
+```
 
-- `bun dev` - Start all workspaces in development mode
-- `bun dev:web` - Start web app only (browser)
-- `bun build` - Build all workspaces
-- `bun check-types` - TypeScript type checking across workspaces
-- `bun check` - Run Biome formatting and linting
+## Scripts
 
-**Desktop app** (run from `apps/web/`):
-- `bun desktop:dev` - Start Tauri app in development
-- `bun desktop:build` - Build production desktop app
+| Command (repo root)       | Description                                            |
+| ------------------------- | ------------------------------------------------------ |
+| `bun install`             | Install dependencies (Bun workspaces + Turborepo)      |
+| `bun dev`                 | Dev server for all workspaces                          |
+| `bun dev:web`             | Dev server, web app only                               |
+| `bun build`               | Production build, all workspaces                       |
+| `bun check-types`         | TypeScript checks across workspaces                    |
+| `bun check`               | Biome format & lint                                    |
+
+**Desktop app** (from `apps/web/`): `bun desktop:dev` · `bun desktop:build`
 
 ## Shared UI Components
 
-React apps share shadcn/ui primitives through `packages/ui`.
-
-- Update design tokens in `packages/ui/src/styles/globals.css`
-- Add components in `packages/ui/src/components/*`
-- Configure shadcn in `packages/ui/components.json`
-
-Add more shared components:
-
-```bash
-npx shadcn@latest add accordion dialog popover -c packages/ui
-```
-
-Import in apps:
+The shadcn/ui primitives live in `packages/ui` and are shared across apps:
 
 ```tsx
 import { Button } from "@tauri-orpc-contract/ui/components/button";
 ```
 
+```bash
+# Add more primitives (from the repo root)
+npx shadcn@latest add accordion dialog popover -c packages/ui
+```
+
+Design tokens: `packages/ui/src/styles/globals.css` · Component config: `packages/ui/components.json`
+
 ## Stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, TanStack Router, TanStack Query, Tailwind CSS 4 |
-| Backend | Rust, Tauri 2 |
-| RPC | oRPC contracts, custom TauriLink |
-| Validation | Zod (contracts), Varlock (env schemas) |
-| Monorepo | Bun workspaces, Turborepo |
-| Tooling | Biome, TypeScript 6 |
+| Layer      | Technology                                                        |
+| ---------- | ----------------------------------------------------------------- |
+| Frontend   | React 19, TanStack Router, TanStack Query, Tailwind CSS 4          |
+| Backend    | Rust, Tauri 2, serde, thiserror                                   |
+| RPC        | oRPC contracts + custom `TauriLink` (Effect internals)             |
+| Validation | Zod (contracts), Varlock (env schemas)                             |
+| Monorepo   | Bun workspaces, Turborepo                                          |
+| Tooling    | TypeScript 6, Biome, Vitest                                        |
 
 ## Documentation
 
-- `packages/tauri-link/README.md` - TauriLink implementation guide
-- `docs/ORPC_ERROR_HANDLING.md` - Error handling patterns
-- `docs/CUSTOM_LINK_IMPLEMENTATION.md` - Custom link architecture
-- `AGENTS.md` files in each workspace - AI context and conventions
+| Document                                                            | Scope                                      |
+| ------------------------------------------------------------------- | ------------------------------------------ |
+| [`packages/tauri-link/README.md`](./packages/tauri-link/README.md)  | Full TauriLink guide — contracts, streaming, errors, API   |
+| [`docs/ORPC_ERROR_HANDLING.md`](./docs/ORPC_ERROR_HANDLING.md)      | Error handling patterns                                    |
+| [`docs/CUSTOM_LINK_IMPLEMENTATION.md`](./docs/CUSTOM_LINK_IMPLEMENTATION.md) | Link architecture deep dive                       |
+| [`docs/OPENAPI_LINK_GUIDE.md`](./docs/OPENAPI_LINK_GUIDE.md)        | OpenAPI-style link guide                                   |
+| `AGENTS.md` (per workspace)                                         | Conventions and AI context                                 |
+
+## License
+
+The `tauri-link` package is released under the [MIT license](./packages/tauri-link/LICENSE).
+
