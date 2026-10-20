@@ -12,6 +12,7 @@ import { fromCustomInvoke, TauriInvokerLive } from "./services/invoker";
 import { ConsoleLoggerLive, fromSimpleLogger, Logger } from "./services/logger";
 import type { EventNameStrategy } from "./streaming/event-name-strategy";
 import { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+import type { ProgressInfo } from "./streaming/progress-types";
 import type {
 	CallOptions,
 	Contract,
@@ -107,6 +108,7 @@ export class TauriLink<TContext = unknown> {
 						commandName,
 						input,
 						transportConfig,
+						callOptions?.onProgress,
 					) as TOutput;
 				}
 
@@ -217,6 +219,7 @@ export class TauriLink<TContext = unknown> {
 		commandName: string,
 		input: unknown,
 		transportConfig: TauriTransportConfig | undefined,
+		onProgress?: (info: ProgressInfo) => void,
 	): AsyncIterableIterator<TOutput> {
 		const transportId =
 			transportConfig?.kind === "channel" ? transportConfig.id : undefined;
@@ -230,6 +233,7 @@ export class TauriLink<TContext = unknown> {
 		const config: StreamConfig = {
 			mode: "channel",
 			channelParam,
+			onProgress,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);

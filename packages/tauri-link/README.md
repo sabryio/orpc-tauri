@@ -598,6 +598,52 @@ for await (const event of await client.stream.streamEvents(undefined)) {
 }
 ```
 
+### Transfer Progress (Channel Streams)
+
+Channel streams can report transfer progress through **data-less control envelopes** — the SSE envelope's `comment` field carries `progress:<bytesRead>/<totalBytes>`. These never enter the consumer's payload schema, so your output type stays pure.
+
+**Rust side** — use the built-in builder and throttle (one tick per N chunks is plenty):
+
+```rust
+// broadcast.rs
+Event::default().progress(bytes_read, total_bytes); // → comment: "progress:65536/262144"
+
+// In your command: send a chunk, then a progress envelope
+on_event.send(Event::default().event("message").id("3").data(chunk))?;
+on_event.send(Event::default().progress(bytes_read, total))?;
+// Finish with the done event (ends the consumer's stream)
+on_event.send(Event::default().event("done"))?;
+```
+
+**TypeScript side** — pass the typed `onProgress` call option:
+
+```typescript
+import type { ProgressInfo } from "@sabryio/orpc-tauri/link";
+
+const iterator = await client.file.download_file(
+  { input: { path: "/data/model.bin" } },
+  {
+    onProgress: (info: ProgressInfo) => {
+      console.log(`${info.percentage}%`);      // 0-100, when total is known
+      console.log(info.bytesTransferred);      // cumulative
+      console.log(info.totalBytes);            // optional
+    },
+  },
+);
+
+for await (const chunk of iterator) {
+  // chunk — only ever payload; progress is never yielded into the stream
+  await write(chunk);
+}
+```
+
+Guarantees:
+
+- Progress envelopes are **swallowed** by the link — they never appear in the async iterator and never touch your Zod schemas
+- Malformed `progress:` comments are ignored silently — control signals can never break a data stream
+- `getEventMeta()` on data envelopes is unchanged
+- Channel transports only: listen-mode (SSE events) streams do not consume progress envelopes
+
 ---
 
 ## Metadata API
@@ -795,6 +841,8 @@ import { tauri } from "@sabryio/orpc-tauri/meta";
 
 // Link implementation
 import { TauriLink, ConsoleLogger, NoopLogger } from "@sabryio/orpc-tauri/link";
+import type { ProgressInfo } from "@sabryio/orpc-tauri/link";
+import { PROGRESS_PREFIX } from "@sabryio/orpc-tauri/link";
 
 // Types
 import type { TauriLinkOptions, SimpleLogger } from "@sabryio/orpc-tauri/link";

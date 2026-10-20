@@ -1,15 +1,16 @@
 import { Effect, Layer, Stream } from "effect";
-import { streamToAsyncIterator } from "./streaming/stream-adapter";
 import {
-	TauriChannelFactory,
+	type TauriChannelFactory,
 	TauriChannelFactoryLive,
 } from "./services/channel-factory";
 import { TauriInvoker, TauriInvokerLive } from "./services/invoker";
-import { TauriListener, TauriListenerLive } from "./services/listener";
+import { type TauriListener, TauriListenerLive } from "./services/listener";
 import { ConsoleLoggerLive } from "./services/logger";
 import { createChannelStream } from "./streaming/channel-stream";
-import { createEventStream } from "./streaming/event-stream";
 import type { EventStreamConfig } from "./streaming/event-stream";
+import { createEventStream } from "./streaming/event-stream";
+import type { ProgressInfo } from "./streaming/progress-types";
+import { streamToAsyncIterator } from "./streaming/stream-adapter";
 
 /**
  * Transport mode for streaming operations.
@@ -25,6 +26,11 @@ export interface StreamConfig {
 	readonly mode: TransportMode;
 	readonly listenConfig?: EventStreamConfig;
 	readonly channelParam?: string;
+	/**
+	 * Progress callback for channel-mode streams. Fires for data-less
+	 * `progress:` control envelopes; never called for yielded values.
+	 */
+	readonly onProgress?: (info: ProgressInfo) => void;
 }
 
 /**
@@ -95,6 +101,7 @@ export class EffectTauriLink {
 							command,
 							input,
 							config.channelParam,
+							config.onProgress,
 						).pipe(Stream.provide(layer), Stream.scoped)
 					: Stream.fail(
 							new Error(

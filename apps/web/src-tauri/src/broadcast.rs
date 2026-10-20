@@ -84,6 +84,16 @@ impl Event {
         self
     }
 
+    /// Meta-only transfer progress envelope (`:progress:<read>/<total>`)
+    ///
+    /// Progress is a control signal, not payload: the envelope carries no
+    /// data field, so it never reaches the consumer's Zod payload schema.
+    /// The link fires it as the channel stream's `onProgress` callback.
+    /// Throttle sending — one progress envelope per N chunks is plenty.
+    pub fn progress(self, bytes_read: u64, total_bytes: u64) -> Self {
+        self.comment(format!("progress:{bytes_read}/{total_bytes}"))
+    }
+
     /// Set the event's data field (`data: <content>`)
     ///
     /// This corresponds to MessageEvent's data field.

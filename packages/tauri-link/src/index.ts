@@ -1,41 +1,40 @@
 // Export TauriLink (Effect-based implementation with Promise facade)
-export { TauriLink } from "./public-api";
 
 // Export typed error classes for power users (optional advanced usage)
 export {
+	AbortError,
+	type CallError,
+	ContractValidationError,
+	MissingCommandMetadataError,
+	ProcedureNotFoundError,
+	StreamError,
 	TauriInvokeError,
 	TauriListenError,
-	StreamError,
 	ValidationError,
-	AbortError,
-	ContractValidationError,
-	ProcedureNotFoundError,
-	MissingCommandMetadataError,
-	type CallError,
 } from "./errors";
-
 // Export metadata utilities
-export { tauri, extractTauriMeta } from "./metadata";
-
+export { extractTauriMeta, tauri } from "./metadata";
+export { TauriLink } from "./public-api";
+export type { SimpleLogger } from "./services/logger";
 // Export simple logger classes and type
 export { ConsoleLogger, NoopLogger } from "./services/logger";
-export type { SimpleLogger } from "./services/logger";
-
-// Export event name strategy
-export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
-export type {
-	TauriMeta,
-	TauriTransportConfig,
-	TauriLinkOptions,
-	MetaPlugin,
-	Contract,
-	CallOptions,
-	StreamEvent,
-	TauriErrorPayload,
-} from "./types";
-export type { SseEvent, EventMeta } from "./streaming/sse-types";
 export type {
 	EventNameStrategy,
 	StreamEventNames,
 } from "./streaming/event-name-strategy";
+// Export event name strategy
+export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+export { PROGRESS_PREFIX } from "./streaming/progress";
+export type { ProgressInfo } from "./streaming/progress-types";
+export type { EventMeta, SseEvent } from "./streaming/sse-types";
 export { EVENT_META_SYMBOL } from "./streaming/sse-types";
+export type {
+	CallOptions,
+	Contract,
+	MetaPlugin,
+	StreamEvent,
+	TauriErrorPayload,
+	TauriLinkOptions,
+	TauriMeta,
+	TauriTransportConfig,
+} from "./types";

@@ -73,6 +73,13 @@ export type StreamEvent<T> =
 export interface CallOptions<TContext> {
 	context?: TContext;
 	signal?: AbortSignal;
+	/**
+	 * Transfer progress callback — only meaningful for streaming calls.
+	 * Fires for channel-mode `progress:` control envelopes.
+	 */
+	onProgress?: (
+		info: import("./streaming/progress-types").ProgressInfo,
+	) => void;
 }
 
 export interface TauriLinkOptions {

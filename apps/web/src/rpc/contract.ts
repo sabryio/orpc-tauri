@@ -72,6 +72,16 @@ const PingResponseSchema = z.object({
 });
 
 // ============================================================================
+// Domain Types - File Transfer
+// ============================================================================
+
+// Each download chunk arrives as a JSON byte array (Vec<u8> over IPC);
+// transform into raw bytes for the consumer.
+const FileChunkSchema = z
+	.array(z.number())
+	.transform((bytes) => new Uint8Array(bytes));
+
+// ============================================================================
 // Error Schemas
 // ============================================================================
 
@@ -172,6 +182,18 @@ export const contract = {
 				}),
 			)
 			.errors(StandardApiErrors),
+		download_file: oc
+			.meta(
+				tauri.channel("on_event"), // Rust command param, verbatim — normalized over IPC
+			)
+			.input(
+				z.object({
+					input: z.object({
+						total_bytes: z.number().int().optional(), // Defaults to 256 KiB in Rust (capped at 2 MB)
+					}),
+				}),
+			)
+			.output(asyncIteratorObject(FileChunkSchema)),
 	},
 } as const;
 

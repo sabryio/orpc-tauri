@@ -33,6 +33,7 @@ pub fn run() {
             commands::stream::stream_events,
             commands::channel_stream::stream_events_channel,
             commands::file::upload_file,
+            commands::file::download_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

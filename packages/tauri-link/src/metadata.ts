@@ -1,5 +1,5 @@
-import { METADATA_KEYS } from "./constants";
 import { camelCase } from "./casing";
+import { METADATA_KEYS } from "./constants";
 import type { MetaPlugin, TauriMeta, TauriTransportConfig } from "./types";
 
 // ============================================================================
@@ -85,7 +85,10 @@ tauri.channel = (id?: { name: string } | string): MetaPlugin =>
 			? {
 					transport: {
 						kind: "channel",
-						id: typeof id === "string" ? camelCase(id) : { ...id, name: camelCase(id.name) },
+						id:
+							typeof id === "string"
+								? camelCase(id)
+								: { ...id, name: camelCase(id.name) },
 					},
 				}
 			: ({ transport: { kind: "channel" } } as TauriMeta),

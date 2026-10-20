@@ -48,6 +48,7 @@ If you need to learn more about particular Effect APIs and concepts that the gui
 | src/streaming/stream-adapter.ts   | Convert Effect.Stream to AsyncIterableIterator          |
 | src/streaming/event-name-strategy.ts | Generate unique event names per stream               |
 | src/streaming/sse-types.ts        | SSE event structure and metadata attachment             |
+| src/streaming/progress.ts         | Transfer progress parsing (`progress:` control envelopes) |
 | src/errors.ts                     | Typed error classes for internal error handling         |
 | src/error-converter.ts            | Convert Effect errors to ORPCError at boundary          |
 | src/resolvers/contract-validator.ts  | Contract structure validation                        |
@@ -72,6 +73,7 @@ bun run test --watch
 - Link reads contract metadata to determine streaming mode, transport type, and (optionally) an explicit command override
 - Command names are derived from the last route-path segment verbatim (no case conversion) when no explicit `tauri.command(...)` meta exists
 - Channel transport ids accept snake_case or camelCase and normalize to camelCase (Tauri IPC keys args in camelCase)
+- Channel streams support transfer progress: data-less `progress:<read>/<total>` comment envelopes fire the `onProgress` call option, never yielded as payload
 - Duplicate effective command names (derived or explicit) fail at contract validation time
 - Unary calls: `Effect.runPromise()` at boundary converts Effect to Promise
 - Event streaming: Effect.Stream with automatic listener cleanup via Scope

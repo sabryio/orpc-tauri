@@ -13,7 +13,8 @@ Rust backend for the Tauri desktop app. Implements oRPC contract commands, dual 
 | src/commands/planet.rs           | CRUD operations with in-memory PlanetStore                |
 | src/commands/stream.rs           | SSE event streaming via Tauri event system                |
 | src/commands/channel_stream.rs   | Channel streaming via Tauri IPC channels                  |
-| src/sse.rs                       | Event types for SSE streaming                             |
+| src/commands/file.rs             | File upload (unary) and download demo (channel + progress) |
+| src/broadcast.rs                 | SSE Event builder (event/id/retry/comment/data/progress) for streaming  |
 | src/types/models.rs              | Domain models (PingResponse, Planet)                      |
 | src/types/errors.rs              | AppError with serialization for IPC                       |
 | Cargo.toml                       | Dependencies (tauri, serde, tokio, uuid, thiserror)       |
@@ -40,6 +41,7 @@ cargo tauri build
 - State managed via `tauri::State<T>` for shared data (PlanetStore)
 - SSE streaming: emit events via `app.emit()`, listen on frontend via event names
 - Channel streaming: accept `Channel<Event<T>>` parameter, send via `channel.send()`
+- Transfer progress: send data-less `Event::default().progress(read, total)` envelopes via channels (throttled, every N chunks); always end channel streams with a `done` event
 - Errors use thiserror for derive, serialize to JSON with code and message
 - Async runtime via `tauri::async_runtime::spawn` for background tasks
 

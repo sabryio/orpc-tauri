@@ -1,5 +1,8 @@
+use crate::broadcast::Event;
 use crate::types::errors::AppError;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+use tauri::ipc::Channel;
 
 #[derive(Debug, Deserialize)]
 pub struct UploadFileInput {
@@ -44,4 +47,79 @@ pub async fn upload_file(input: UploadFileInput) -> Result<UploadFileOutput, App
         filename: input.filename,
         mime_type,
     })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DownloadFileInput {
+    /// Total bytes to generate (demo command — no real file I/O).
+    /// Capped at 2 MB server-side regardless of the requested value.
+    pub total_bytes: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn download_file(
+    input: DownloadFileInput,
+    on_event: Channel<Event>,
+) -> Result<usize, AppError> {
+    const CHUNK_SIZE: usize = 32 * 1024; // 32 KiB
+    const MAX_TOTAL: u64 = 2 * 1024 * 1024;
+    const DEMO_DELAY: Duration = Duration::from_millis(40);
+
+    let total = input
+        .total_bytes
+        .unwrap_or(256 * 1024)
+        .min(MAX_TOTAL) as usize;
+
+    log::info!("Streaming download demo: {} bytes", total);
+
+    tauri::async_runtime::spawn(async move {
+        // 1. FLUSH: establish connection (Axum-style)
+        if let Err(e) = on_event.send(Event::default().comment("flush")) {
+            log::error!("Failed to send flush event: {:?}", e);
+            return;
+        }
+
+        // 2. DATA + PROGRESS: chunk envelopes interleaved with data-less
+        //    progress control envelopes (`progress:<read>/<total>`).
+        let mut sent = 0usize;
+        let mut seq = 0usize;
+
+        while sent < total {
+            let size = CHUNK_SIZE.min(total - sent);
+            let chunk: Vec<u8> = (0..size).map(|i| ((i * 7 + seq * 13) % 256) as u8).collect();
+
+            if let Err(e) = on_event.send(
+                Event::default()
+                    .event("message")
+                    .id(seq.to_string())
+                    .data(chunk),
+            ) {
+                log::error!("Failed to send chunk {}: {:?}", seq, e);
+                return;
+            }
+
+            sent += size;
+            seq += 1;
+
+            // Throttle: one progress envelope per 2 chunks, plus the final one
+            if seq % 2 == 0 || sent == total {
+                if let Err(e) = on_event.send(Event::default().progress(sent as u64, total as u64)) {
+                    log::error!("Failed to send progress: {:?}", e);
+                    return;
+                }
+            }
+
+            // Demo pacing so progress is visible in the UI
+            tokio::time::sleep(DEMO_DELAY).await;
+        }
+
+        // 3. DONE: Signal stream completion
+        if let Err(e) = on_event.send(Event::default().event("done")) {
+            log::error!("Failed to send done event: {:?}", e);
+        }
+
+        log::info!("Download demo complete: {} bytes in {} chunks", sent, seq);
+    });
+
+    Ok(total)
 }

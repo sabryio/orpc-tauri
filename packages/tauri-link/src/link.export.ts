@@ -59,3 +59,7 @@ export type {
 // SSE types
 export type { SseEvent, EventMeta } from "./streaming/sse-types";
 export { EVENT_META_SYMBOL } from "./streaming/sse-types";
+
+// Transfer progress (channel streams)
+export type { ProgressInfo } from "./streaming/progress-types";
+export { PROGRESS_PREFIX } from "./streaming/progress";
