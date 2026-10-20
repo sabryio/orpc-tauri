@@ -129,6 +129,29 @@ describe("derived command names", () => {
 			expect(meta.transport).toEqual({ kind: "channel", id: "onEvent" });
 		});
 
+		it("normalizes snake_case channel ids to camelCase", () => {
+			const meta = tauri.channel("on_event").init({})[
+				"~tauri" as never
+			] as unknown as {
+				transport?: { kind: string; id?: unknown };
+			};
+
+			expect(meta.transport).toEqual({ kind: "channel", id: "onEvent" });
+		});
+
+		it("normalizes the name of id objects passed to tauri.channel", () => {
+			const meta = tauri.channel({ name: "event_received" }).init({})[
+				"~tauri" as never
+			] as unknown as {
+				transport?: { kind: string; id?: unknown };
+			};
+
+			expect(meta.transport).toEqual({
+				kind: "channel",
+				id: { name: "eventReceived" },
+			});
+		});
+
 		it("tauri.channel() omits id (link falls back to the default param)", () => {
 			const meta = tauri.channel().init({})["~tauri" as never] as unknown as {
 				transport?: { kind: string; id?: unknown };

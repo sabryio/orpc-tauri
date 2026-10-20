@@ -498,13 +498,13 @@ export const contract = {
     // `stream_events_channel` automatically. Metadata only configures
     // the transport.
     stream_events_channel: oc
-      .meta(tauri.channel()) // Defaults to "onEvent" parameter name
+      .meta(tauri.channel()) // Defaults to "onEvent" (Rust param `on_event`)
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
 
-    // Custom parameter name
+    // Custom Rust parameter name — write it exactly as it appears in Rust
     stream_events_custom: oc
-      .meta(tauri.channel("onEvent")) // Rust param `on_event`, camelCased by Tauri IPC
+      .meta(tauri.channel("custom_param")) // Rust param `custom_param`
       .input(z.void())
       .output(asyncIteratorObject(EventSchema)),
   },
@@ -636,8 +636,9 @@ tauri.listen();
 // Omit id to use the default "onEvent" parameter name
 tauri.channel();
 
-// Or specify the custom channel parameter name
-tauri.channel("onEvent");
+// Or specify the custom Rust parameter name — snake_case or camelCase,
+// both work (normalized internally, since Tauri IPC keys args in camelCase)
+tauri.channel("custom_param"); // sends over IPC as `customParam`
 ```
 
 ### Transport (raw config)
@@ -654,7 +655,7 @@ oc.meta(
 oc.meta(
   tauri.transport({
     kind: "channel",
-    id: "customChannel", // Parameter name in Rust (defaults to "onEvent" if omitted)
+    id: "custom_param", // Rust param name — normalized to camelCase for IPC
   }),
 );
 ```

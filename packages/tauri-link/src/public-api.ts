@@ -1,4 +1,5 @@
 import { Effect, Layer } from "effect";
+import { camelCase } from "./casing";
 import { DEFAULT_PARAMS, GLOBAL_EVENT_NAMES } from "./constants";
 import { toORPCError } from "./error-converter";
 import type { ContractValidationError } from "./errors";
@@ -221,8 +222,10 @@ export class TauriLink<TContext = unknown> {
 			transportConfig?.kind === "channel" ? transportConfig.id : undefined;
 		const channelParam: string =
 			typeof transportId === "string"
-				? transportId
-				: (transportId?.name ?? DEFAULT_PARAMS.CHANNEL);
+				? camelCase(transportId)
+				: transportId?.name
+					? camelCase(transportId.name)
+					: DEFAULT_PARAMS.CHANNEL;
 
 		const config: StreamConfig = {
 			mode: "channel",

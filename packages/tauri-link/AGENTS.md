@@ -71,6 +71,7 @@ bun run test --watch
 
 - Link reads contract metadata to determine streaming mode, transport type, and (optionally) an explicit command override
 - Command names are derived from the last route-path segment verbatim (no case conversion) when no explicit `tauri.command(...)` meta exists
+- Channel transport ids accept snake_case or camelCase and normalize to camelCase (Tauri IPC keys args in camelCase)
 - Duplicate effective command names (derived or explicit) fail at contract validation time
 - Unary calls: `Effect.runPromise()` at boundary converts Effect to Promise
 - Event streaming: Effect.Stream with automatic listener cleanup via Scope

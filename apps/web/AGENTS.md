@@ -36,7 +36,7 @@ bun env:generate
 
 - Contract defines the API surface: every Tauri command has a matching oRPC contract entry
 - Contract route keys ARE the Rust command names (snake_case, verbatim) — the link derives commands from the route path; `tauri.command(...)` meta is only an explicit override
-- Streaming transports: `tauri.listen()` for SSE events, `tauri.channel("onEvent")` for Tauri channels
+- Streaming transports: `tauri.listen()` for SSE events, `tauri.channel("on_event")` for Tauri channels (Rust param name verbatim — normalized to camelCase for IPC args)
 - Stream IDs and event names generated via contract metadata (streamId, eventNames functions)
 - Routes use TanStack Router file-based routing, generated in `src/routeTree.gen.ts`
 - Components from `@tauri-orpc-contract/ui` package, not local duplicates

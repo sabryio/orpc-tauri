@@ -148,7 +148,7 @@ export const contract = {
 			.output(asyncIteratorObject(AppEventSchema)),
 		stream_events_channel: oc
 			.meta(
-				tauri.channel("onEvent"), // Maps to Rust param `on_event`
+				tauri.channel("on_event"), // Rust command param, verbatim — normalized over IPC
 			)
 			.input(z.void())
 			.output(asyncIteratorObject(AppEventSchema)),

@@ -1,4 +1,5 @@
 import { METADATA_KEYS } from "./constants";
+import { camelCase } from "./casing";
 import type { MetaPlugin, TauriMeta, TauriTransportConfig } from "./types";
 
 // ============================================================================
@@ -70,10 +71,23 @@ tauri.transport = (config): MetaPlugin => tauri({ transport: config });
 
 tauri.listen = (): MetaPlugin => tauri({ transport: { kind: "listen" } });
 
+/**
+ * Channel streaming helper.
+ *
+ * `id` is the Rust parameter name, written exactly as it appears in the
+ * Rust command signature (e.g. `on_event`). It is normalized to camelCase
+ * internally, since Tauri IPC keys command arguments that way. camelCase
+ * input is accepted and returned unchanged.
+ */
 tauri.channel = (id?: { name: string } | string): MetaPlugin =>
 	tauri(
 		id
-			? ({ transport: { kind: "channel", id } } as TauriMeta)
+			? {
+					transport: {
+						kind: "channel",
+						id: typeof id === "string" ? camelCase(id) : { ...id, name: camelCase(id.name) },
+					},
+				}
 			: ({ transport: { kind: "channel" } } as TauriMeta),
 	);
 
