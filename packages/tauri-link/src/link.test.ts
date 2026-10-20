@@ -150,5 +150,71 @@ describe("EffectTauriLink", () => {
 			});
 			await iterator.return?.();
 		});
+
+		it("interrupts the stream and rejects when the AbortSignal fires mid-stream", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+			};
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>() =>
+						// Emit one message, then go silent forever (simulating an
+						// ongoing command the consumer cancels)
+						Effect.sync(() => {
+							mockChannel.onmessage?.({ event: "message", data: "chunk-1" });
+							return null as T;
+						}) as unknown as Effect.Effect<T>,
+				}),
+			);
+
+			const mockListener = Layer.succeed(
+				TauriListener,
+				TauriListener.of({
+					listen: () => Effect.void,
+				}),
+			);
+
+			const mockChannelFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: <T>() => Effect.succeed(mockChannel as unknown as T),
+				}),
+			);
+
+			const mockLayer = Layer.mergeAll(
+				mockInvoker,
+				mockListener,
+				mockChannelFactory,
+			);
+
+			const controller = new AbortController();
+
+			const iterator = EffectTauriLink.stream<unknown, string>(
+				"streamy_command",
+				{},
+				{
+					mode: "channel",
+					channelParam: "onEvent",
+					signal: controller.signal,
+				},
+				mockLayer,
+			);
+
+			// First pull succeeds (starts the scope, forks the watcher)
+			expect(await iterator.next()).toMatchObject({ value: "chunk-1" });
+
+			// Cancel midstream — the next pull must fail promptly
+			controller.abort();
+
+			await expect(iterator.next()).rejects.toMatchObject({
+				code: "CLIENT_CLOSED_REQUEST",
+				message: "Request aborted",
+			});
+
+			// Subsequent pulls see a dead stream (done — not hung)
+			await expect(iterator.next()).resolves.toMatchObject({ done: true });
+		});
 	});
 });

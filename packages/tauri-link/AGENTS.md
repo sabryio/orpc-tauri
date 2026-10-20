@@ -120,6 +120,6 @@ bun run test --watch
 - **Error unwrapping:** Effect errors wrap original Tauri errors in `.cause` property, unwrapped at boundary
 - Contract validation runs at link construction, throws if structure invalid
 - Rust command names are snake_case; contract route keys use the same snake_case string exactly, so the command derives from the path with zero metadata
-- AbortSignal checked before invoke, not passed to Tauri (Tauri has no cancellation API)
+- AbortSignal is checked before invoke, and wired mid-stream via Stream.interruptWhen: aborting a stream tears it down and rejects with ORPCError("CLIENT_CLOSED_REQUEST"); a channel stream's scope teardown also unregisters the Tauri IPC callback (no `end` from Rust on cancel), so onProgress/payloads stop instantly; the Rust command itself still runs (Tauri has no server-side cancellation)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

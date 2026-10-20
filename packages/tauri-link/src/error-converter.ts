@@ -29,6 +29,20 @@ export function toORPCError(error: unknown): ORPCError<string, unknown> {
 		});
 	}
 
+	// Consumer cancellation (pre-invoke or mid-stream abort)
+	if (
+		error &&
+		typeof error === "object" &&
+		"_tag" in error &&
+		error._tag === "AbortError"
+	) {
+		const abortError = error as unknown as { reason?: string };
+
+		return new ORPCError("CLIENT_CLOSED_REQUEST", {
+			message: abortError.reason ?? "Request aborted",
+		});
+	}
+
 	// Unwrap Effect errors to get the original Tauri error
 	const unwrapped =
 		error &&

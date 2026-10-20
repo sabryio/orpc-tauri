@@ -60,7 +60,7 @@ const CHUNK_SIZE: usize = 32 * 1024; // 32 KiB
 const DEFAULT_TOTAL: usize = 256 * 1024; // 256 KiB
 const MAX_TOTAL: u64 = 2 * 1024 * 1024; // 2 MB safety cap for the demo
 const PROGRESS_EVERY_N_CHUNKS: usize = 2; // one progress tick per N chunks
-const DEMO_DELAY: Duration = Duration::from_millis(40);
+const DEMO_DELAY: Duration = Duration::from_millis(250);
 
 #[tauri::command]
 pub async fn download_file(

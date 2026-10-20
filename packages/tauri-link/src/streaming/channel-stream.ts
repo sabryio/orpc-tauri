@@ -43,6 +43,28 @@ export const createChannelStream = <T>(
 
 			const channel = yield* factory.createChannel<SseEvent<T>>();
 
+			// Scope teardown (completion, failure, or mid-stream cancellation):
+			// stop the pipeline first so late envelopes can't reach the consumer
+			// (onProgress or the queue), then unregister the underlying Tauri
+			// invoke callback so Rust keeps sending into a dead channel.
+			// Tauri only tears a channel down when the backend sends `end` — a
+			// cancelled stream has no `end`, so the client must do it here.
+			yield* Effect.addFinalizer(() =>
+				Effect.sync(() => {
+					channel.onmessage = () => {};
+					const cleanup = (
+						channel as unknown as { cleanupCallback?: () => void }
+					).cleanupCallback;
+					if (typeof cleanup === "function") {
+						try {
+							cleanup.call(channel);
+						} catch {
+							// Callback already gone (e.g. Rust sent `end`) — nothing to do.
+						}
+					}
+				}),
+			);
+
 			// Set up channel message handler
 			channel.onmessage = (msg) => {
 				if (msg.event === "message" && msg.data !== undefined) {

@@ -346,5 +346,60 @@ describe("createChannelStream", () => {
 				{ bytesTransferred: 40, totalBytes: 80, percentage: 50 },
 			]);
 		});
+		it("tears the channel pipeline down when the stream exits (cancellation safety)", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+				cleanupCallback: () => {
+					cleanupCalled = true;
+				},
+			} as unknown as Channel<unknown>;
+
+			let cleanupCalled = false;
+
+			const mockFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: () => Effect.succeed(mockChannel),
+				}),
+			);
+
+			const progress: ProgressInfo[] = [];
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>() =>
+						Effect.sync(() => {
+							mockChannel.onmessage?.({ event: "message", data: "chunk" });
+							mockChannel.onmessage?.({ event: "done" });
+							return null as T;
+						}),
+				}),
+			);
+
+			const stream = createChannelStream<string>(
+				"test_command",
+				{},
+				"onEvent",
+				(info) => progress.push(info),
+			);
+
+			const results = await Effect.runPromise(
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
+					Effect.scoped,
+				),
+			);
+
+			// Simulate a Rust envelope arriving AFTER teardown (e.g. the backend
+			// keeps emitting for a cancelled stream): the finalizer's no-op
+			// onmessage must swallow it — no onProgress, no yields.
+			mockChannel.onmessage?.({ comment: "progress:99/100" });
+
+			expect(Array.from(results)).toEqual(["chunk"]);
+			expect(progress).toEqual([]);
+			expect(cleanupCalled).toBe(true);
+		});
 	});
 });

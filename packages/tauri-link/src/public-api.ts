@@ -114,6 +114,7 @@ export class TauriLink<TContext = unknown> {
 						transportConfig,
 						callOptions?.onProgress,
 						timeoutMs,
+						callOptions?.signal,
 					) as TOutput;
 				}
 
@@ -122,6 +123,7 @@ export class TauriLink<TContext = unknown> {
 					input,
 					transportConfig,
 					timeoutMs,
+					callOptions?.signal,
 				) as TOutput;
 			}
 
@@ -180,6 +182,7 @@ export class TauriLink<TContext = unknown> {
 		input: unknown,
 		transportConfig: TauriTransportConfig | undefined,
 		timeoutMs?: number,
+		signal?: AbortSignal,
 	): AsyncIterableIterator<TOutput> {
 		// Check if transport config has stream ID configuration
 		const hasStreamIdConfig =
@@ -232,6 +235,7 @@ export class TauriLink<TContext = unknown> {
 				getEventNames: () => eventNames,
 			},
 			timeoutMs,
+			signal,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(
@@ -247,6 +251,7 @@ export class TauriLink<TContext = unknown> {
 		transportConfig: TauriTransportConfig | undefined,
 		onProgress?: (info: ProgressInfo) => void,
 		timeoutMs?: number,
+		signal?: AbortSignal,
 	): AsyncIterableIterator<TOutput> {
 		const channelConfig =
 			transportConfig?.kind === "channel" ? transportConfig : undefined;
@@ -264,6 +269,7 @@ export class TauriLink<TContext = unknown> {
 			onProgress,
 			progressParser: makeProgressParser(channelConfig?.progress),
 			timeoutMs,
+			signal,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);

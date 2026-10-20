@@ -1,5 +1,5 @@
 import { Effect, Layer, Stream } from "effect";
-import { StreamError, TimeoutError } from "./errors";
+import { AbortError, type StreamError, TimeoutError } from "./errors";
 import {
 	type TauriChannelFactory,
 	TauriChannelFactoryLive,
@@ -44,6 +44,12 @@ export interface StreamConfig {
 	 * it as a whole-call deadline instead.
 	 */
 	readonly timeoutMs?: number;
+	/**
+	 * When aborted mid-stream, interrupts the stream and tears down its
+	 * resources (listener/channel via Scope). The iterator rejects with
+	 * `ORPCError("CLIENT_CLOSED_REQUEST")` at the boundary.
+	 */
+	readonly signal?: AbortSignal;
 }
 
 /**
@@ -109,7 +115,11 @@ export class EffectTauriLink {
 			TauriChannelFactory | TauriInvoker | TauriListener
 		>;
 		if (config.mode === "listen" && config.listenConfig) {
-			baseStream = createEventStream<TOutput>(command, input, config.listenConfig);
+			baseStream = createEventStream<TOutput>(
+				command,
+				input,
+				config.listenConfig,
+			);
 		} else if (config.mode === "channel" && config.channelParam) {
 			baseStream = createChannelStream<TOutput>(
 				command,
@@ -129,9 +139,9 @@ export class EffectTauriLink {
 		// Inactivity deadline from `tauri.timeout` meta: if no value arrives
 		// within the window, fail with a typed TimeoutError.
 		const timeoutMs = config.timeoutMs;
-		const timedStream: Stream.Stream<
+		let timedStream: Stream.Stream<
 			TOutput,
-			StreamError | TimeoutError | Error,
+			StreamError | TimeoutError | AbortError | Error,
 			TauriChannelFactory | TauriInvoker | TauriListener
 		> =
 			timeoutMs !== undefined
@@ -141,12 +151,42 @@ export class EffectTauriLink {
 							orElse: () =>
 								Stream.fromEffect(
 									Effect.fail(
-										new TimeoutError({ operation: command, timeout: timeoutMs }),
+										new TimeoutError({
+											operation: command,
+											timeout: timeoutMs,
+										}),
 									),
 								),
 						}),
 					)
 				: baseStream;
+
+		// Mid-stream cancellation: when the caller's AbortSignal fires,
+		// interrupt in-progress pulls immediately. The watcher fails with an
+		// AbortError (which the stream emits), and Scope teardown removes the
+		// listener / closes the channel.
+		if (config.signal) {
+			const signal = config.signal;
+			timedStream = timedStream.pipe(
+				Stream.interruptWhen(
+					Effect.callback<never, AbortError>((resume) => {
+						const abortAndFail = () => {
+							resume(
+								Effect.fail(new AbortError({ reason: "Request aborted" })),
+							);
+						};
+						if (signal.aborted) {
+							abortAndFail();
+							return;
+						}
+						signal.addEventListener("abort", abortAndFail, { once: true });
+						return Effect.sync(() => {
+							signal.removeEventListener("abort", abortAndFail);
+						});
+					}),
+				),
+			);
+		}
 
 		const streamWithServices = timedStream.pipe(
 			Stream.provide(layer),

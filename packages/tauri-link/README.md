@@ -476,6 +476,32 @@ function QueryStreamComponent() {
 }
 ```
 
+### Cancellation (`signal`)
+
+Pass `signal` in the call options. Scope depends on the call kind:
+
+- **Unary** — the signal is checked before the command runs; pre-aborted requests fail fast without invoking.
+- **Streams** — checked before invoke **and wired mid-stream**: aborting tears the stream down immediately (interrupted in-progress pull, listener unlistened, channel dropped), and the pending `next()` rejects with `ORPCError("CLIENT_CLOSED_REQUEST")`. Subsequent pulls see a closed iterator (`done`), never a hang.
+
+```typescript
+const controller = new AbortController();
+
+const iterator = await client.file.download_file(
+  { input: { total_bytes: 262_144 } },
+  { signal: controller.signal },
+);
+
+for await (const chunk of iterator) {
+  // ...
+}
+```
+
+Notes:
+
+- **The Rust command is unaffected** — Tauri has no cancellation API honoured by Rust commands, so a cancelled command runs to completion; only consumption stops. On teardown the link stops processing envelopes and unregisters the channel's IPC callback (a cancelled stream has no `end` envelope, so the client must release it), which is why `onProgress` and payloads stop instantly. Long-running commands can check `on_event.closed()` themselves if they want to short-circuit production.
+- `tauri.timeout` and `signal` compose: whichever fires first wins (inactivity timeout → `"TIMEOUT"`, abort → `"CLIENT_CLOSED_REQUEST"`).
+- React: wire the component's `AbortController` to `useEffect` cleanup or a Cancel button.
+
 ### Channel-Based Streaming
 
 Optimized for point-to-point streaming with lower overhead. Uses Tauri's native Channel API.
