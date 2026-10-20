@@ -14,20 +14,15 @@ use crate::types::errors::AppError;
 use crate::types::models::Planet;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, Resource, ResourceId};
+use tokio::sync::Notify;
 
-/// Slower pacing than `file.rs` so the cancel window is obvious on the demo
-/// (256 KiB / 32 KiB = 8 chunks ≈ 6 s of transfer).
-const RESOURCE_DEMO_DELAY: Duration = Duration::from_millis(750);
-
-/// The pause between chunks is awaited in ticks of this length, polling the
-/// cancel token each tick. A `Resource::close` mid-transfer is therefore
-/// noticed within ~50 ms — not only at the next chunk boundary.
-const CANCEL_POLL_TICK: Duration = Duration::from_millis(50);
+/// The pause between chunks is awaited via `tokio::select!` — a cancel
+/// notification wakes the task immediately instead of polling.
+const RESOURCE_DEMO_DELAY: Duration = Duration::from_millis(500);
 
 /// Wire reference to a Rust-owned resource. Never add fields — the JS side
 /// types this as `RustResourceHandle` (a plain `{ rid: number }`).
@@ -110,10 +105,7 @@ pub struct DbOpenInput {
 }
 
 #[tauri::command]
-pub async fn db_open(
-    input: DbOpenInput,
-    app: AppHandle,
-) -> Result<ResourceRef, AppError> {
+pub async fn db_open(input: DbOpenInput, app: AppHandle) -> Result<ResourceRef, AppError> {
     let conn = DatabaseConn::open(&input.path)?;
     let rid = app.resources_table().add(conn);
 
@@ -128,10 +120,7 @@ pub struct DbQueryInput {
 }
 
 #[tauri::command]
-pub async fn db_query(
-    input: DbQueryInput,
-    app: AppHandle,
-) -> Result<Vec<Planet>, AppError> {
+pub async fn db_query(input: DbQueryInput, app: AppHandle) -> Result<Vec<Planet>, AppError> {
     let rid = input.handle.rid;
     let conn = app
         .resources_table()
@@ -147,10 +136,7 @@ pub struct DbCloseInput {
 }
 
 #[tauri::command]
-pub async fn db_close(
-    input: DbCloseInput,
-    app: AppHandle,
-) -> Result<(), AppError> {
+pub async fn db_close(input: DbCloseInput, app: AppHandle) -> Result<(), AppError> {
     let rid = input.handle.rid;
     app.resources_table()
         .close(rid)
@@ -167,10 +153,9 @@ pub async fn db_close(
 /// Handle for the in-flight download task. Registered in the resource table;
 /// announced to JS as `handle:<rid>`. Closing the resource — from the link's
 /// auto-close teardown, `link.resource.close(handle)`, or Rust — stops the
-/// transfer: `Resource::close` flips the token the loop polls.
+/// transfer: `Resource::close` notifies the waiting task immediately.
 pub struct TransferHandle {
-    rid: ResourceId,
-    token: Arc<AtomicBool>,
+    cancel: Arc<Notify>,
 }
 
 impl Resource for TransferHandle {
@@ -182,8 +167,8 @@ impl Resource for TransferHandle {
         // Single server-side cancellation hook — runs whoever closes the rid
         // (link autoClose teardown, link.resource.close(), or the worker
         // dropping its own completed handle).
-        log::info!("TransferHandle rid {} closed (cancel token set)", self.rid);
-        self.token.store(true, Ordering::Release);
+        log::info!("TransferHandle closed (cancel notified)");
+        self.cancel.notify_one();
     }
 }
 
@@ -205,22 +190,10 @@ pub async fn resource_file_download(
         .map_or(DEFAULT_TOTAL, |requested| requested.min(MAX_TOTAL) as usize);
 
     // 1. Register the transfer handle; the rid is announced once JS-side.
-    //    The table assigns the rid itself, so the handle is registered once
-    //    (bare) and immediately replaced with one that knows its rid.
-    let token = Arc::new(AtomicBool::new(false));
-    let rid: ResourceId = app
-        .resources_table()
-        .add(TransferHandle {
-            rid: 0,
-            token: token.clone(),
-        });
-    app.resources_table().replace(
-        rid,
-        TransferHandle {
-            rid,
-            token: token.clone(),
-        },
-    );
+    let cancel = Arc::new(Notify::new());
+    let rid: ResourceId = app.resources_table().add(TransferHandle {
+        cancel: cancel.clone(),
+    });
 
     log::info!("resource_file_download: {total} bytes (handle rid {rid})");
 
@@ -241,19 +214,13 @@ pub async fn resource_file_download(
             return;
         }
 
-        // 4. DATA + PROGRESS while neither the consumer nor the resource
-        //    lifecycle cancelled the token.
+        // 4. DATA + PROGRESS — cancelled is signalled via Notify so the
+        //    inter-chunk delay wakes immediately without polling.
         let mut sent = 0usize;
         let mut seq = 0usize;
+        let mut cancelled = false;
 
-        while sent < total {
-            if token.load(Ordering::Acquire) {
-                // Resource closed (JS cancel / db-close-style teardown).
-                // No `done`: the stream was cancelled, not completed.
-                log::info!("Download rid {rid} cancelled — resource closed mid-stream");
-                return;
-            }
-
+        'outer: while sent < total {
             let size = CHUNK_SIZE.min(total - sent);
             let chunk: Vec<u8> = (0..size)
                 .map(|i| ((i * 7 + seq * 13) % 256) as u8)
@@ -279,24 +246,23 @@ pub async fn resource_file_download(
                 return;
             }
 
-            // Pacing, awaited in small ticks so a mid-transfer cancel is
-            // noticed by the CANCEL_POLL_TICK, not at the next chunk
-            // boundary — the loop above re-polls before the next chunk.
-            let mut remaining = RESOURCE_DEMO_DELAY;
-            while !remaining.is_zero() {
-                if token.load(Ordering::Acquire) {
-                    break;
+            // Inter-chunk pacing: skip delay after the last chunk so `done`
+            // fires immediately. On cancel, `notify_one` wakes select! early.
+            if sent < total {
+                tokio::select! {
+                    _ = tokio::time::sleep(RESOURCE_DEMO_DELAY) => {}
+                    _ = cancel.notified() => {
+                        cancelled = true;
+                        break 'outer;
+                    }
                 }
-                let step = remaining.min(CANCEL_POLL_TICK);
-                tokio::time::sleep(step).await;
-                remaining -= step;
             }
         }
 
-        // 5. Cancel-at-the-tail race: the consumer aborted while the final
-        //    chunk was in flight — treat it as cancelled (no `done`).
-        if token.load(Ordering::Acquire) {
-            log::info!("Download rid {rid} cancelled at the tail — no done sent");
+        if cancelled {
+            // Resource closed mid-stream (JS cancel / auto-close teardown).
+            // No `done`: the stream was cancelled, not completed.
+            log::info!("Download rid {rid} cancelled — resource closed mid-stream");
             return;
         }
 

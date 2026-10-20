@@ -134,8 +134,8 @@ export function ResourceTab() {
 						}));
 					},
 					// Cancel drop: abort tears the stream down; the link's
-					// autoClose closes the announced rid server-side, and the
-					// Rust download loop stops at its next token poll.
+					// autoClose closes the announced rid server-side, and
+					// Resource::close notifies the Rust task immediately.
 					signal: controller.signal,
 				},
 			);

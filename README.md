@@ -18,13 +18,13 @@ Built on [oRPC](https://orpc.unnoq.com/) and [Tauri 2](https://v2.tauri.app/), p
 
 ## Key Capabilities
 
-| | |
-| ------------------------------ | ------------------------------------------------------------------------ |
-| 🔗 **Contract-first**          | One source of truth; types flow to React, TanStack Query, and Rust       |
-| ⚡ **Zero code generation**    | The contract *is* the client — no generators, no drift                   |
-| 🎯 **Convention over config**  | Route keys are the Rust command names, verbatim                          |
-| 📡 **Dual streaming**          | Listen-style SSE events **and** Tauri channels, in one contract           |
-| 🛡️ **Typed errors**            | Rust `AppError` maps to typed, contract-defined oRPC errors               |
+|                                |                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| 🔗 **Contract-first**          | One source of truth; types flow to React, TanStack Query, and Rust           |
+| ⚡ **Zero code generation**    | The contract _is_ the client — no generators, no drift                       |
+| 🎯 **Convention over config**  | Route keys are the Rust command names, verbatim                              |
+| 📡 **Dual streaming**          | Listen-style SSE events **and** Tauri channels, in one contract              |
+| 🛡️ **Typed errors**            | Rust `AppError` maps to typed, contract-defined oRPC errors                  |
 | 🏗️ **Resource-safe internals** | Effect-based link with automatic listener cleanup — Promise-based public API |
 
 ## Quick Start
@@ -62,7 +62,8 @@ export const contract = {
 ```tsx
 // Fully typed — including error shapes
 const mutation = orpc.planet.delete_planet.mutationOptions({
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
+  onSuccess: () =>
+    queryClient.invalidateQueries({ queryKey: orpc.planet.key() }),
 });
 ```
 
@@ -119,14 +120,14 @@ React (TanStack Router + Query)
 
 ## Scripts
 
-| Command (repo root)       | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `bun install`             | Install dependencies (Bun workspaces + Turborepo)      |
-| `bun dev`                 | Dev server for all workspaces                          |
-| `bun dev:web`             | Dev server, web app only                               |
-| `bun build`               | Production build, all workspaces                       |
-| `bun check-types`         | TypeScript checks across workspaces                    |
-| `bun check`               | Biome format & lint                                    |
+| Command (repo root) | Description                                       |
+| ------------------- | ------------------------------------------------- |
+| `bun install`       | Install dependencies (Bun workspaces + Turborepo) |
+| `bun dev`           | Dev server for all workspaces                     |
+| `bun dev:web`       | Dev server, web app only                          |
+| `bun build`         | Production build, all workspaces                  |
+| `bun check-types`   | TypeScript checks across workspaces               |
+| `bun check`         | Biome format & lint                               |
 
 **Desktop app** (from `apps/web/`): `bun desktop:dev` · `bun desktop:build`
 
@@ -147,26 +148,65 @@ Design tokens: `packages/ui/src/styles/globals.css` · Component config: `packag
 
 ## Stack
 
-| Layer      | Technology                                                        |
-| ---------- | ----------------------------------------------------------------- |
-| Frontend   | React 19, TanStack Router, TanStack Query, Tailwind CSS 4          |
-| Backend    | Rust, Tauri 2, serde, thiserror                                   |
-| RPC        | oRPC contracts + custom `TauriLink` (Effect internals)             |
-| Validation | Zod (contracts), Varlock (env schemas)                             |
-| Monorepo   | Bun workspaces, Turborepo                                          |
-| Tooling    | TypeScript 6, Biome, Vitest                                        |
+| Layer      | Technology                                                |
+| ---------- | --------------------------------------------------------- |
+| Frontend   | React 19, TanStack Router, TanStack Query, Tailwind CSS 4 |
+| Backend    | Rust, Tauri 2, serde, thiserror                           |
+| RPC        | oRPC contracts + custom `TauriLink` (Effect internals)    |
+| Validation | Zod (contracts), Varlock (env schemas)                    |
+| Monorepo   | Bun workspaces, Turborepo                                 |
+| Tooling    | TypeScript 6, Biome, Vitest                               |
 
 ## Documentation
 
-| Document                                                            | Scope                                      |
-| ------------------------------------------------------------------- | ------------------------------------------ |
-| [`packages/tauri-link/README.md`](./packages/tauri-link/README.md)  | Full TauriLink guide — contracts, streaming, errors, API   |
-| [`docs/ORPC_ERROR_HANDLING.md`](./docs/ORPC_ERROR_HANDLING.md)      | Error handling patterns                                    |
-| [`docs/CUSTOM_LINK_IMPLEMENTATION.md`](./docs/CUSTOM_LINK_IMPLEMENTATION.md) | Link architecture deep dive                       |
-| [`docs/OPENAPI_LINK_GUIDE.md`](./docs/OPENAPI_LINK_GUIDE.md)        | OpenAPI-style link guide                                   |
-| `AGENTS.md` (per workspace)                                         | Conventions and AI context                                 |
+| Document                                                                     | Scope                                                    |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------- |
+| [`packages/tauri-link/README.md`](./packages/tauri-link/README.md)           | Full TauriLink guide — contracts, streaming, errors, API |
+| [`docs/ORPC_ERROR_HANDLING.md`](./docs/ORPC_ERROR_HANDLING.md)               | Error handling patterns                                  |
+| [`docs/CUSTOM_LINK_IMPLEMENTATION.md`](./docs/CUSTOM_LINK_IMPLEMENTATION.md) | Link architecture deep dive                              |
+| [`docs/OPENAPI_LINK_GUIDE.md`](./docs/OPENAPI_LINK_GUIDE.md)                 | OpenAPI-style link guide                                 |
+| `AGENTS.md` (per workspace)                                                  | Conventions and AI context                               |
+
+## Troubleshooting
+
+### `resources.close not allowed` when cancelling a resource-backed stream
+
+**Symptom:** Clicking Cancel on a resource-backed download (or any `tauri.resource()` stream) logs:
+
+```
+[tauri-link] Failed to close Rust resource rid=… (Rust task was NOT cancelled — it keeps running).
+Cause: TauriInvokeError: resources.close not allowed.
+```
+
+**Cause:** Tauri bakes capabilities into the binary at compile time. The `plugin:resources|close` call the link uses to cancel the Rust task requires `core:resources:allow-close`, which is **not** included in `core:default`. Additionally, if `tauri.conf.json` has an inline `app.security.capabilities` array, the files in `src-tauri/capabilities/` are ignored entirely — only the inline block is compiled in.
+
+**Fix:** Remove the inline `capabilities` block from `tauri.conf.json` so Tauri loads `src-tauri/capabilities/*.json` instead:
+
+```json
+// tauri.conf.json — before
+"security": {
+  "csp": null,
+  "capabilities": [ { ... } ]   // ← this shadows your capabilities/ folder
+}
+
+// tauri.conf.json — after
+"security": {
+  "csp": null
+}
+```
+
+Then make sure `src-tauri/capabilities/default.json` includes the permission:
+
+```json
+{
+  "identifier": "default",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:resources:allow-close"]
+}
+```
+
+Rebuild (`bun desktop:dev`) — the cancel button will now close the rid server-side and stop the Rust task within ~50 ms.
 
 ## License
 
 The `tauri-link` package is released under the [MIT license](./packages/tauri-link/LICENSE).
-
