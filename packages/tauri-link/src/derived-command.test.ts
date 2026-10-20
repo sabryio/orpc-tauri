@@ -159,5 +159,32 @@ describe("derived command names", () => {
 
 			expect(meta.transport).toEqual({ kind: "channel" });
 		});
+
+		it("tauri.channel attaches the progress convention to the transport", () => {
+			const parser = (comment: string) =>
+				comment.startsWith("tick:") ? { bytesTransferred: 1 } : undefined;
+
+			const meta = tauri.channel("on_event", { prefix: "pct:" }).init({})[
+				"~tauri" as never
+			] as unknown as {
+				transport?: { kind: string; id?: unknown; progress?: unknown };
+			};
+
+			expect(meta.transport).toEqual({
+				kind: "channel",
+				id: "onEvent",
+				progress: { prefix: "pct:" },
+			});
+
+			const custom = tauri
+				.channel(undefined, {
+					parser,
+				})
+				.init({})["~tauri" as never] as unknown as {
+				transport?: { kind: string; progress?: unknown };
+			};
+
+			expect(custom.transport?.progress).toEqual({ parser });
+		});
 	});
 });

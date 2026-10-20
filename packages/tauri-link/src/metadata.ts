@@ -56,6 +56,7 @@ export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
 	listen(): MetaPlugin;
 	channel(
 		id?: Extract<TauriTransportConfig, { kind: "channel" }>["id"],
+		progress?: Extract<TauriTransportConfig, { kind: "channel" }>["progress"],
 	): MetaPlugin;
 	timeout(timeout: TauriMeta["timeout"]): MetaPlugin;
 	debug(debug: TauriMeta["debug"]): MetaPlugin;
@@ -79,20 +80,38 @@ tauri.listen = (): MetaPlugin => tauri({ transport: { kind: "listen" } });
  * internally, since Tauri IPC keys command arguments that way. camelCase
  * input is accepted and returned unchanged.
  */
-tauri.channel = (id?: { name: string } | string): MetaPlugin =>
-	tauri(
-		id
-			? {
-					transport: {
-						kind: "channel",
-						id:
-							typeof id === "string"
-								? camelCase(id)
-								: { ...id, name: camelCase(id.name) },
-					},
-				}
-			: ({ transport: { kind: "channel" } } as TauriMeta),
-	);
+/**
+ * Channel streaming helper.
+ *
+ * `id` is the Rust parameter name, written exactly as it appears in the
+ * Rust command signature (e.g. `on_event`). It is normalized to camelCase
+ * internally, since Tauri IPC keys command arguments that way. camelCase
+ * input is accepted and returned unchanged.
+ *
+ * `progress` customizes the transfer-progress convention for this procedure:
+ * `prefix` renames the built-in `progress:` prefix; `parser` fully owns
+ * recognition (wins over `prefix`). Omit for the standard convention.
+ */
+tauri.channel = (id?: { name: string } | string, progress?): MetaPlugin => {
+	const transport: Extract<TauriTransportConfig, { kind: "channel" }> = id
+		? {
+				kind: "channel",
+				id:
+					typeof id === "string"
+						? camelCase(id)
+						: { ...id, name: camelCase(id.name) },
+			}
+		: ({ kind: "channel" } as Extract<
+				TauriTransportConfig,
+				{ kind: "channel" }
+			>);
+
+	return tauri({
+		transport: progress
+			? ({ ...transport, progress } as TauriTransportConfig)
+			: transport,
+	});
+};
 
 tauri.timeout = (timeout): MetaPlugin => tauri({ timeout });
 

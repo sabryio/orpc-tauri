@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TauriInvoker } from "../services/invoker";
 import { TauriListener } from "../services/listener";
 import { createEventStream, type EventStreamConfig } from "./event-stream";
-import { EVENT_META_SYMBOL, type SseEvent } from "./sse-types";
+import { EVENT_META_SYMBOL, type EventMeta, type SseEvent } from "./sse-types";
 
 describe("createEventStream", () => {
 	it("should emit data events from the stream", async () => {
@@ -39,13 +39,16 @@ describe("createEventStream", () => {
 			}),
 		};
 
-		const stream = createEventStream<string>("test_command", { foo: "bar" }, config);
+		const stream = createEventStream<string>(
+			"test_command",
+			{ foo: "bar" },
+			config,
+		);
 
 		const results = await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockInvoker),
-				Effect.provide(mockListener),
+				Effect.provide(Layer.mergeAll(mockInvoker, mockListener)),
 				Effect.scoped,
 			),
 		);
@@ -89,8 +92,7 @@ describe("createEventStream", () => {
 		const result = await Effect.runPromiseExit(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockInvoker),
-				Effect.provide(mockListener),
+				Effect.provide(Layer.mergeAll(mockInvoker, mockListener)),
 				Effect.scoped,
 			),
 		);
@@ -135,8 +137,7 @@ describe("createEventStream", () => {
 		const results = await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockInvoker),
-				Effect.provide(mockListener),
+				Effect.provide(Layer.mergeAll(mockInvoker, mockListener)),
 				Effect.scoped,
 			),
 		);
@@ -190,8 +191,7 @@ describe("createEventStream", () => {
 		await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockInvoker),
-				Effect.provide(mockListener),
+				Effect.provide(Layer.mergeAll(mockInvoker, mockListener)),
 				Effect.scoped,
 			),
 		);
@@ -249,8 +249,7 @@ describe("createEventStream", () => {
 		const results = await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockInvoker),
-				Effect.provide(mockListener),
+				Effect.provide(Layer.mergeAll(mockInvoker, mockListener)),
 				Effect.scoped,
 			),
 		);
@@ -264,7 +263,7 @@ describe("createEventStream", () => {
 		expect(value.message).toBe("data-with-meta");
 
 		// Check that metadata symbol is attached (old implementation behavior)
-		const meta = (value as any)[EVENT_META_SYMBOL];
+		const meta = (value as Record<symbol, EventMeta>)[EVENT_META_SYMBOL];
 		expect(meta).toBeDefined();
 		expect(meta.id).toBe("event-42");
 		expect(meta.retry).toBe(3000);

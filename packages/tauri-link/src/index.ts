@@ -25,7 +25,10 @@ export type {
 // Export event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
 export { PROGRESS_PREFIX } from "./streaming/progress";
-export type { ProgressInfo } from "./streaming/progress-types";
+export type {
+	ChannelProgressConfig,
+	ProgressInfo,
+} from "./streaming/progress-types";
 export type { EventMeta, SseEvent } from "./streaming/sse-types";
 export { EVENT_META_SYMBOL } from "./streaming/sse-types";
 export type {

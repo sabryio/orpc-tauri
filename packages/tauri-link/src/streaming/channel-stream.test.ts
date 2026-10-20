@@ -40,8 +40,7 @@ describe("createChannelStream", () => {
 		const results = await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockFactory),
-				Effect.provide(mockInvoker),
+				Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
 				Effect.scoped,
 			),
 		);
@@ -82,8 +81,7 @@ describe("createChannelStream", () => {
 		const result = await Effect.runPromiseExit(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockFactory),
-				Effect.provide(mockInvoker),
+				Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
 				Effect.scoped,
 			),
 		);
@@ -129,8 +127,7 @@ describe("createChannelStream", () => {
 		await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockFactory),
-				Effect.provide(mockInvoker),
+				Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
 				Effect.scoped,
 			),
 		);
@@ -175,8 +172,7 @@ describe("createChannelStream", () => {
 		const results = await Effect.runPromise(
 			stream.pipe(
 				Stream.runCollect,
-				Effect.provide(mockFactory),
-				Effect.provide(mockInvoker),
+				Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
 				Effect.scoped,
 			),
 		);
@@ -226,8 +222,7 @@ describe("createChannelStream", () => {
 			const results = await Effect.runPromise(
 				stream.pipe(
 					Stream.runCollect,
-					Effect.provide(mockFactory),
-					Effect.provide(mockInvoker),
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
 					Effect.scoped,
 				),
 			);
@@ -279,14 +274,77 @@ describe("createChannelStream", () => {
 			const results = await Effect.runPromise(
 				stream.pipe(
 					Stream.runCollect,
-					Effect.provide(mockFactory),
-					Effect.provide(mockInvoker),
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
 					Effect.scoped,
 				),
 			);
 
 			expect(Array.from(results)).toEqual(["chunk"]);
 			expect(progress).toEqual([]);
+		});
+
+		it("honors a custom progress parser (procedure-level convention)", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+			} as unknown as Channel<unknown>;
+
+			const mockFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: () => Effect.succeed(mockChannel),
+				}),
+			);
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>() =>
+						Effect.sync(() => {
+							if (mockChannel.onmessage) {
+								mockChannel.onmessage({ comment: "pct:40/80" });
+								mockChannel.onmessage({ comment: "progress:1/2" });
+								mockChannel.onmessage({ comment: "tick:xx" });
+								mockChannel.onmessage({ event: "message", data: "chunk" });
+								mockChannel.onmessage({ event: "done" });
+							}
+							return null as T;
+						}),
+				}),
+			);
+
+			const progress: ProgressInfo[] = [];
+
+			const stream = createChannelStream<string>(
+				"test_command",
+				{},
+				"onEvent",
+				(info) => progress.push(info),
+				(comment) => {
+					const m = /^pct:(\d+)\/(\d+)$/.exec(comment);
+					return m
+						? {
+								bytesTransferred: Number(m[1]),
+								totalBytes: Number(m[2]),
+								percentage: Math.round((Number(m[1]) / Number(m[2])) * 100),
+							}
+						: undefined;
+				},
+			);
+
+			const results = await Effect.runPromise(
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
+					Effect.scoped,
+				),
+			);
+
+			// Custom parser owns recognition: built-in prefix ignored, unmatched
+			// comments swallowed, payload stream untouched.
+			expect(Array.from(results)).toEqual(["chunk"]);
+			expect(progress).toEqual([
+				{ bytesTransferred: 40, totalBytes: 80, percentage: 50 },
+			]);
 		});
 	});
 });

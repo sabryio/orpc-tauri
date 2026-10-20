@@ -56,19 +56,20 @@ pub struct DownloadFileInput {
     pub total_bytes: Option<u64>,
 }
 
+const CHUNK_SIZE: usize = 32 * 1024; // 32 KiB
+const DEFAULT_TOTAL: usize = 256 * 1024; // 256 KiB
+const MAX_TOTAL: u64 = 2 * 1024 * 1024; // 2 MB safety cap for the demo
+const PROGRESS_EVERY_N_CHUNKS: usize = 2; // one progress tick per N chunks
+const DEMO_DELAY: Duration = Duration::from_millis(40);
+
 #[tauri::command]
 pub async fn download_file(
     input: DownloadFileInput,
     on_event: Channel<Event>,
 ) -> Result<usize, AppError> {
-    const CHUNK_SIZE: usize = 32 * 1024; // 32 KiB
-    const MAX_TOTAL: u64 = 2 * 1024 * 1024;
-    const DEMO_DELAY: Duration = Duration::from_millis(40);
-
     let total = input
         .total_bytes
-        .unwrap_or(256 * 1024)
-        .min(MAX_TOTAL) as usize;
+        .map_or(DEFAULT_TOTAL, |requested| requested.min(MAX_TOTAL) as usize);
 
     log::info!("Streaming download demo: {} bytes", total);
 
@@ -81,12 +82,16 @@ pub async fn download_file(
 
         // 2. DATA + PROGRESS: chunk envelopes interleaved with data-less
         //    progress control envelopes (`progress:<read>/<total>`).
+        //    Demo pattern: deterministic pseudo-random bytes so UI debugging
+        //    is reproducible (any byte generator would do for a real file).
         let mut sent = 0usize;
         let mut seq = 0usize;
 
         while sent < total {
             let size = CHUNK_SIZE.min(total - sent);
-            let chunk: Vec<u8> = (0..size).map(|i| ((i * 7 + seq * 13) % 256) as u8).collect();
+            let chunk: Vec<u8> = (0..size)
+                .map(|i| ((i * 7 + seq * 13) % 256) as u8)
+                .collect();
 
             if let Err(e) = on_event.send(
                 Event::default()
@@ -101,12 +106,12 @@ pub async fn download_file(
             sent += size;
             seq += 1;
 
-            // Throttle: one progress envelope per 2 chunks, plus the final one
-            if seq % 2 == 0 || sent == total {
-                if let Err(e) = on_event.send(Event::default().progress(sent as u64, total as u64)) {
-                    log::error!("Failed to send progress: {:?}", e);
-                    return;
-                }
+            // Throttle: one progress envelope per N chunks, plus the final one
+            if (seq.is_multiple_of(PROGRESS_EVERY_N_CHUNKS) || sent == total)
+                && let Err(e) = on_event.send(Event::default().progress(sent as u64, total as u64))
+            {
+                log::error!("Failed to send progress: {:?}", e);
+                return;
             }
 
             // Demo pacing so progress is visible in the UI

@@ -17,49 +17,45 @@
  * ```
  */
 
+// Typed errors
+export {
+	AbortError,
+	type CallError,
+	ContractValidationError,
+	MissingCommandMetadataError,
+	ProcedureNotFoundError,
+	StreamError,
+	TauriInvokeError,
+	TauriListenError,
+	ValidationError,
+} from "./errors";
 // Link module - TauriLink class and related types
 export { TauriLink } from "./public-api";
-
-// Logger utilities
-export { ConsoleLogger, NoopLogger } from "./services/logger";
-export type { SimpleLogger } from "./services/logger";
-
 // Invoker utilities
 export type { InvokeFn } from "./services/invoker";
-
-// Event name strategy
-export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+export type { SimpleLogger } from "./services/logger";
+// Logger utilities
+export { ConsoleLogger, NoopLogger } from "./services/logger";
 export type {
 	EventNameStrategy,
 	StreamEventNames,
 } from "./streaming/event-name-strategy";
-
-// Typed errors
-export {
-	TauriInvokeError,
-	TauriListenError,
-	StreamError,
-	ValidationError,
-	AbortError,
-	ContractValidationError,
-	ProcedureNotFoundError,
-	MissingCommandMetadataError,
-	type CallError,
-} from "./errors";
-
+// Event name strategy
+export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
+export { PROGRESS_PREFIX } from "./streaming/progress";
+// Transfer progress (channel streams)
+export type {
+	ChannelProgressConfig,
+	ProgressInfo,
+} from "./streaming/progress-types";
+// SSE types
+export type { EventMeta, SseEvent } from "./streaming/sse-types";
+export { EVENT_META_SYMBOL } from "./streaming/sse-types";
 // Core types
 export type {
-	TauriLinkOptions,
-	Contract,
 	CallOptions,
+	Contract,
 	StreamEvent,
 	TauriErrorPayload,
+	TauriLinkOptions,
 } from "./types";
-
-// SSE types
-export type { SseEvent, EventMeta } from "./streaming/sse-types";
-export { EVENT_META_SYMBOL } from "./streaming/sse-types";
-
-// Transfer progress (channel streams)
-export type { ProgressInfo } from "./streaming/progress-types";
-export { PROGRESS_PREFIX } from "./streaming/progress";

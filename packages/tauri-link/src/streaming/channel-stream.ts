@@ -2,7 +2,7 @@ import { Effect, type Stream } from "effect";
 import type { StreamError } from "../errors";
 import { TauriChannelFactory } from "../services/channel-factory";
 import type { TauriInvoker } from "../services/invoker";
-import { PROGRESS_PREFIX, parseProgress } from "./progress";
+import { parseProgress } from "./progress";
 import type { ProgressInfo } from "./progress-types";
 import { createQueueStream, forkInvoke } from "./stream-utils";
 
@@ -25,15 +25,17 @@ interface SseEvent<T> {
  *
  * The channel is created within a Scope for automatic cleanup.
  *
- * Data-less envelopes (`comment`-only) are control signals: `progress:`
- * comments fire the optional onProgress callback, other envelopes (flush,
- * unknown) are swallowed silently. Control envelopes are never yielded.
+ * Data-less envelopes (`comment`-only) are control signals: comments matching
+ * the procedure's progress convention fire the optional onProgress callback,
+ * other envelopes (flush, unknown) are swallowed silently. Control envelopes
+ * are never yielded.
  */
 export const createChannelStream = <T>(
 	command: string,
 	input: unknown,
 	paramName: string,
 	onProgress?: (info: ProgressInfo) => void,
+	progressParser?: (comment: string) => ProgressInfo | undefined,
 ): Stream.Stream<T, StreamError, TauriInvoker | TauriChannelFactory> =>
 	createQueueStream<T, TauriInvoker | TauriChannelFactory>((emit) =>
 		Effect.gen(function* () {
@@ -49,11 +51,10 @@ export const createChannelStream = <T>(
 					emit.error(msg.error ?? msg);
 				} else if (msg.event === "done") {
 					emit.done();
-				} else if (
-					onProgress !== undefined &&
-					(msg.comment ?? "").startsWith(PROGRESS_PREFIX)
-				) {
-					const info = parseProgress(msg.comment as string);
+				} else if (onProgress !== undefined && msg.comment) {
+					const info = progressParser
+						? progressParser(msg.comment)
+						: parseProgress(msg.comment);
 					if (info) onProgress(info);
 				}
 			};

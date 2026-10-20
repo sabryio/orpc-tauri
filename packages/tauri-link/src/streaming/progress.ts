@@ -6,16 +6,17 @@
  * Format: `progress:<bytesTransferred>/<totalBytes>` — the total part is
  * optional; malformed envelopes are ignored silently, never thrown.
  */
-import type { ProgressInfo } from "./progress-types";
+import type { ChannelProgressConfig, ProgressInfo } from "./progress-types";
 
 export const PROGRESS_PREFIX = "progress:";
 
-const PROGRESS_PREFIX_LENGTH = PROGRESS_PREFIX.length;
+export function parseProgress(
+	comment: string,
+	prefix: string = PROGRESS_PREFIX,
+): ProgressInfo | undefined {
+	if (!comment.startsWith(prefix)) return undefined;
 
-export function parseProgress(comment: string): ProgressInfo | undefined {
-	if (!comment.startsWith(PROGRESS_PREFIX)) return undefined;
-
-	const body = comment.slice(PROGRESS_PREFIX_LENGTH);
+	const body = comment.slice(prefix.length);
 	const [read, total] = body.split("/");
 
 	const bytesTransferred = Number(read);
@@ -44,4 +45,17 @@ export function parseProgress(comment: string): ProgressInfo | undefined {
 			Math.round((bytesTransferred / totalBytes) * 100),
 		),
 	};
+}
+
+/**
+ * Builds the comment parser a channel stream uses to recognize progress
+ * envelopes, honoring the transport's per-procedure convention
+ * (ChannelProgressConfig): a custom `parser` wins; otherwise a `prefix`
+ * override renames the built-in "progress:" prefix; otherwise default.
+ */
+export function makeProgressParser(
+	config?: ChannelProgressConfig,
+): (comment: string) => ProgressInfo | undefined {
+	if (config?.parser) return config.parser;
+	return (comment) => parseProgress(comment, config?.prefix ?? PROGRESS_PREFIX);
 }

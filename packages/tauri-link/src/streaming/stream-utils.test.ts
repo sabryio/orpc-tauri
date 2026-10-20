@@ -1,6 +1,6 @@
-import { Cause, Context, Effect, Layer, Stream } from "effect";
+import { Cause, Context, Data, Effect, Layer, Stream } from "effect";
 import { describe, expect, it } from "vitest";
-import { StreamError } from "../errors";
+import { StreamError, TauriInvokeError } from "../errors";
 import { TauriInvoker } from "../services/invoker";
 import { createQueueStream, forkInvoke } from "./stream-utils";
 
@@ -8,7 +8,7 @@ describe("stream-utils", () => {
 	describe("createQueueStream", () => {
 		it("should emit values through the queue", async () => {
 			const stream = createQueueStream<number, never>((emit) =>
-				Effect.gen(function* () {
+				Effect.sync(() => {
 					emit.value(1);
 					emit.value(2);
 					emit.value(3);
@@ -24,7 +24,7 @@ describe("stream-utils", () => {
 
 		it("should emit error through the queue", async () => {
 			const stream = createQueueStream<number, never>((emit) =>
-				Effect.gen(function* () {
+				Effect.sync(() => {
 					emit.value(1);
 					emit.error({ message: "test error" });
 				}),
@@ -47,7 +47,7 @@ describe("stream-utils", () => {
 
 		it("should complete stream via emit.done()", async () => {
 			const stream = createQueueStream<number, never>((emit) =>
-				Effect.gen(function* () {
+				Effect.sync(() => {
 					emit.value(1);
 					emit.done();
 					emit.value(2); // Should not emit
@@ -61,8 +61,12 @@ describe("stream-utils", () => {
 		});
 
 		it("should wrap setup errors in StreamError", async () => {
+			class SetupFailedError extends Data.TaggedError("SetupFailedError")<{
+				readonly cause: unknown;
+			}> {}
+
 			const stream = createQueueStream<number, never>(() =>
-				Effect.fail(new Error("setup failed")),
+				Effect.fail(new SetupFailedError({ cause: "setup failed" })),
 			);
 
 			const result = await Effect.runPromiseExit(
@@ -101,7 +105,11 @@ describe("stream-utils", () => {
 			);
 
 			const result = await Effect.runPromise(
-				stream.pipe(Stream.runCollect, Effect.provide(testLayer), Effect.scoped),
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(testLayer),
+					Effect.scoped,
+				),
 			);
 
 			expect(Array.from(result)).toEqual([42]);
@@ -128,16 +136,14 @@ describe("stream-utils", () => {
 				}),
 			);
 
-			await Effect.runPromise(
-				stream.pipe(Stream.runCollect, Effect.scoped),
-			);
+			await Effect.runPromise(stream.pipe(Stream.runCollect, Effect.scoped));
 
 			expect(cleanupCalls).toEqual(["acquired", "released"]);
 		});
 
 		it("should handle multiple sequential emissions", async () => {
 			const stream = createQueueStream<number, never>((emit) =>
-				Effect.gen(function* () {
+				Effect.sync(() => {
 					for (let i = 0; i < 10; i++) {
 						emit.value(i);
 					}
@@ -176,12 +182,16 @@ describe("stream-utils", () => {
 		});
 
 		it("should catch invoke errors and call onError", async () => {
-			const testError = new Error("invoke failed");
+			const testError = new TauriInvokeError({
+				command: "invoke_failed",
+				input: { arg: "value" },
+				cause: "invoke failed",
+			});
 
 			const mockInvoker = Layer.succeed(
 				TauriInvoker,
 				TauriInvoker.of({
-					invoke: <T>() => Effect.fail(testError) as Effect.Effect<T, any, never>,
+					invoke: () => Effect.fail(testError),
 				}),
 			);
 
@@ -253,11 +263,12 @@ describe("stream-utils", () => {
 			const startTime = Date.now();
 
 			// Keep scope alive while forked fiber runs
+			// forkInvoke returns immediately, so we exit quickly
 			await Effect.runPromise(
-				Effect.gen(function* () {
-					yield* forkInvoke("test_command", {}, () => {});
-					// forkInvoke returns immediately, so we exit quickly
-				}).pipe(Effect.provide(mockInvoker), Effect.scoped),
+				forkInvoke("test_command", {}, () => {}).pipe(
+					Effect.provide(mockInvoker),
+					Effect.scoped,
+				),
 			);
 
 			const duration = Date.now() - startTime;
@@ -299,19 +310,27 @@ describe("stream-utils", () => {
 			);
 
 			const result = await Effect.runPromise(
-				stream.pipe(Stream.runCollect, Effect.provide(mockInvoker), Effect.scoped),
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(mockInvoker),
+					Effect.scoped,
+				),
 			);
 
 			expect(Array.from(result)).toEqual([1, 2, 3]);
 		});
 
 		it("should propagate invoke errors through emit.error", async () => {
-			const testError = new Error("command failed");
+			const testError = new TauriInvokeError({
+				command: "failing_command",
+				input: {},
+				cause: "command failed",
+			});
 
 			const mockInvoker = Layer.succeed(
 				TauriInvoker,
 				TauriInvoker.of({
-					invoke: <T>() => Effect.fail(testError) as Effect.Effect<T, any, never>,
+					invoke: () => Effect.fail(testError),
 				}),
 			);
 
@@ -329,7 +348,11 @@ describe("stream-utils", () => {
 			);
 
 			const result = await Effect.runPromiseExit(
-				stream.pipe(Stream.runCollect, Effect.provide(mockInvoker), Effect.scoped),
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(mockInvoker),
+					Effect.scoped,
+				),
 			);
 
 			expect(result._tag).toBe("Failure");

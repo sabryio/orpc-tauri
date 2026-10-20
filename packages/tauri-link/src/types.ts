@@ -1,4 +1,5 @@
 import type { ORPCError } from "@orpc/client";
+import type { ChannelProgressConfig } from "./streaming/progress-types";
 
 export type Contract = Record<string, unknown>;
 
@@ -19,7 +20,11 @@ export type TauriTransportConfig =
 				};
 			};
 	  }
-	| { kind: "channel"; id?: { name: string } | string };
+	| {
+			kind: "channel";
+			id?: { name: string } | string;
+			progress?: ChannelProgressConfig;
+	  };
 
 export interface TauriMeta {
 	/**
