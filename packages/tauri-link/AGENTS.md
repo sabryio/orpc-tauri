@@ -75,6 +75,8 @@ bun run test --watch
 - Channel transport ids accept snake_case or camelCase and normalize to camelCase (Tauri IPC keys args in camelCase)
 - Channel streams support transfer progress: data-less `progress:<read>/<total>` comment envelopes fire the `onProgress` call option, never yielded as payload
 - Duplicate effective command names (derived or explicit) fail at contract validation time
+- `tauri.timeout(ms)` is a client-side deadline: whole-call for unary (`ORPCError("TIMEOUT")` at boundary), inactivity window for streams (typed `TimeoutError` fails the iterator; Rust side unaffected)
+- No dead metadata: every `TauriMeta` field is consumed by the link (`tags`/`permissions` were cut — Tauri capabilities belong in `src-tauri/capabilities/*.json`)
 - Unary calls: `Effect.runPromise()` at boundary converts Effect to Promise
 - Event streaming: Effect.Stream with automatic listener cleanup via Scope
 - Channel streaming: Effect.Stream with channel messages, no manual cleanup needed
@@ -84,6 +86,7 @@ bun run test --watch
 - Debug mode controlled per procedure via contract metadata
 - SSE metadata preserved: `EVENT_META_SYMBOL` attached to data payloads (id, retry, comments)
 - Typed errors internally (TauriInvokeError, StreamError, etc.) converted to ORPCError at boundary
+- Streaming boundary: streamToAsyncIterator maps stream failures through toORPCError too, so consumer's for-await rejects with ORPCError (unary and stream errors share the same shape)
 
 ## Effect Internals
 

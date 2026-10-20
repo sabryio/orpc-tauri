@@ -37,6 +37,22 @@ export class ContractValidationError extends Data.TaggedError(
 }> {}
 
 /**
+ * Raised when a call or stream exceeds the `tauri.timeout(...)` budget.
+ *
+ * Unary calls: mapped to `ORPCError("TIMEOUT")` at the boundary.
+ * Streams: fails the async iterator when no value arrives within the
+ * window (inactivity deadline — semantics documented in README).
+ */
+export class TimeoutError extends Data.TaggedError("TimeoutError")<{
+	readonly operation: string;
+	readonly timeout: number;
+}> {
+	override get message(): string {
+		return `${this.operation} timed out after ${this.timeout}ms`;
+	}
+}
+
+/**
  * Error thrown when procedure not found in contract.
  */
 export class ProcedureNotFoundError extends Data.TaggedError(

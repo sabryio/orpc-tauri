@@ -17,14 +17,6 @@ function validateCommandChange(
 	}
 }
 
-function mergeArrayField<T>(
-	incomingField: T[] | undefined,
-	currentField: T[] | undefined,
-): T[] | undefined {
-	if (currentField && incomingField) return [...currentField, ...incomingField];
-	return incomingField ?? currentField;
-}
-
 function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
 	validateCommandChange(incoming.command, current?.command);
 
@@ -33,8 +25,6 @@ function mergeTauriMeta(incoming: TauriMeta, current?: TauriMeta): TauriMeta {
 		transport: incoming.transport ?? current?.transport,
 		timeout: incoming.timeout ?? current?.timeout,
 		debug: incoming.debug ?? current?.debug,
-		tags: mergeArrayField(incoming.tags, current?.tags),
-		permissions: mergeArrayField(incoming.permissions, current?.permissions),
 	};
 }
 

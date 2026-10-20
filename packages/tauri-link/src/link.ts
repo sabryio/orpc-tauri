@@ -1,4 +1,5 @@
 import { Effect, Layer, Stream } from "effect";
+import { StreamError, TimeoutError } from "./errors";
 import {
 	type TauriChannelFactory,
 	TauriChannelFactoryLive,
@@ -37,6 +38,12 @@ export interface StreamConfig {
 	 * to the built-in `progress:` parser when omitted.
 	 */
 	readonly progressParser?: (comment: string) => ProgressInfo | undefined;
+	/**
+	 * Client-side inactivity deadline in milliseconds (from `tauri.timeout`
+	 * meta). Fires when no value arrives within the window; unary calls use
+	 * it as a whole-call deadline instead.
+	 */
+	readonly timeoutMs?: number;
 }
 
 /**
@@ -96,25 +103,55 @@ export class EffectTauriLink {
 		> = EffectTauriLink.AppLayer,
 	): AsyncIterableIterator<TOutput> {
 		// Create stream based on transport mode and provide layer immediately
-		const streamWithServices =
-			config.mode === "listen" && config.listenConfig
-				? createEventStream<TOutput>(command, input, config.listenConfig).pipe(
-						Stream.provide(layer),
-						Stream.scoped,
+		let baseStream: Stream.Stream<
+			TOutput,
+			StreamError | TimeoutError | Error,
+			TauriChannelFactory | TauriInvoker | TauriListener
+		>;
+		if (config.mode === "listen" && config.listenConfig) {
+			baseStream = createEventStream<TOutput>(command, input, config.listenConfig);
+		} else if (config.mode === "channel" && config.channelParam) {
+			baseStream = createChannelStream<TOutput>(
+				command,
+				input,
+				config.channelParam,
+				config.onProgress,
+				config.progressParser,
+			);
+		} else {
+			baseStream = Stream.fail(
+				new Error(
+					`Invalid stream config: mode=${config.mode}, listenConfig=${!!config.listenConfig}, channelParam=${config.channelParam}`,
+				),
+			);
+		}
+
+		// Inactivity deadline from `tauri.timeout` meta: if no value arrives
+		// within the window, fail with a typed TimeoutError.
+		const timeoutMs = config.timeoutMs;
+		const timedStream: Stream.Stream<
+			TOutput,
+			StreamError | TimeoutError | Error,
+			TauriChannelFactory | TauriInvoker | TauriListener
+		> =
+			timeoutMs !== undefined
+				? baseStream.pipe(
+						Stream.timeoutOrElse({
+							duration: timeoutMs,
+							orElse: () =>
+								Stream.fromEffect(
+									Effect.fail(
+										new TimeoutError({ operation: command, timeout: timeoutMs }),
+									),
+								),
+						}),
 					)
-				: config.mode === "channel" && config.channelParam
-					? createChannelStream<TOutput>(
-							command,
-							input,
-							config.channelParam,
-							config.onProgress,
-							config.progressParser,
-						).pipe(Stream.provide(layer), Stream.scoped)
-					: Stream.fail(
-							new Error(
-								`Invalid stream config: mode=${config.mode}, listenConfig=${!!config.listenConfig}, channelParam=${config.channelParam}`,
-							),
-						).pipe(Stream.scoped);
+				: baseStream;
+
+		const streamWithServices = timedStream.pipe(
+			Stream.provide(layer),
+			Stream.scoped,
+		);
 
 		yield* streamToAsyncIterator(streamWithServices);
 	}

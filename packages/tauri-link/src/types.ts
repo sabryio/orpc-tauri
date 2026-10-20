@@ -33,10 +33,15 @@ export interface TauriMeta {
 	 */
 	command?: string;
 	transport?: TauriTransportConfig;
+	/**
+	 * Client-side deadline in milliseconds applied by the link.
+	 *
+	 * Unary calls: the whole call must complete within the window.
+	 * Streams: inactivity deadline — fails when no value arrives within
+	 * the window (a slow but steady stream is never cut).
+	 */
 	timeout?: number;
 	debug?: boolean;
-	tags?: string[];
-	permissions?: string[];
 }
 
 export interface MetaPlugin {

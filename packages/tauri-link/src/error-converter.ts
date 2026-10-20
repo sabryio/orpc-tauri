@@ -7,6 +7,28 @@ import { ORPCError } from "@orpc/client";
  * preserving Tauri error structure (code/message/data/defined).
  */
 export function toORPCError(error: unknown): ORPCError<string, unknown> {
+	// Timeout budget exceeded (tauri.timeout meta)
+	if (
+		error &&
+		typeof error === "object" &&
+		"_tag" in error &&
+		error._tag === "TimeoutError"
+	) {
+		const timeoutError = error as unknown as {
+			operation: string;
+			timeout: number;
+			message: string;
+		};
+
+		return new ORPCError("TIMEOUT", {
+			message: timeoutError.message,
+			data: {
+				operation: timeoutError.operation,
+				timeout: timeoutError.timeout,
+			},
+		});
+	}
+
 	// Unwrap Effect errors to get the original Tauri error
 	const unwrapped =
 		error &&
@@ -23,7 +45,7 @@ export function toORPCError(error: unknown): ORPCError<string, unknown> {
 		"code" in unwrapped &&
 		typeof unwrapped.code === "string" &&
 		"message" in unwrapped &&
-		typeof (unwrapped as any).message === "string"
+		typeof (unwrapped as Record<string, unknown>).message === "string"
 	) {
 		const tauriError = unwrapped as {
 			code: string;

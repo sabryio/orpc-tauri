@@ -115,6 +115,18 @@ export class ProcedureResolver {
 	}
 
 	/**
+	 * Get the client-side timeout (milliseconds) for a procedure, from
+	 * `tauri.timeout(...)` meta. Undefined means no deadline is applied.
+	 */
+	getTimeout(path: readonly string[]): number | undefined {
+		const procedure = this.resolve(path);
+		if (!procedure) return undefined;
+
+		const tauriMeta = extractTauriMeta(procedure);
+		return tauriMeta?.timeout;
+	}
+
+	/**
 	 * Get transport configuration.
 	 */
 	getTransportConfig(

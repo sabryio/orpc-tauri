@@ -3,7 +3,7 @@ import { camelCase } from "./casing";
 import { DEFAULT_PARAMS, GLOBAL_EVENT_NAMES } from "./constants";
 import { toORPCError } from "./error-converter";
 import type { ContractValidationError } from "./errors";
-import { AbortError } from "./errors";
+import { AbortError, TimeoutError } from "./errors";
 import type { StreamConfig } from "./link";
 import { EffectTauriLink } from "./link";
 import { validateContract } from "./resolvers/contract-validator";
@@ -99,6 +99,9 @@ export class TauriLink<TContext = unknown> {
 				return yield* new AbortError({ reason: "Request aborted" });
 			}
 
+			// Client-side deadline from `tauri.timeout(...)` meta
+			const timeoutMs = self.resolver.getTimeout(path);
+
 			// Handle streaming vs unary
 			if (self.resolver.isStreaming(path)) {
 				const transport = self.resolver.getTransport(path);
@@ -110,6 +113,7 @@ export class TauriLink<TContext = unknown> {
 						input,
 						transportConfig,
 						callOptions?.onProgress,
+						timeoutMs,
 					) as TOutput;
 				}
 
@@ -117,6 +121,7 @@ export class TauriLink<TContext = unknown> {
 					commandName,
 					input,
 					transportConfig,
+					timeoutMs,
 				) as TOutput;
 			}
 
@@ -125,10 +130,28 @@ export class TauriLink<TContext = unknown> {
 				string,
 				unknown
 			>;
-			const result = yield* EffectTauriLink.call<
-				Record<string, unknown>,
-				TOutput
-			>(commandName, args);
+			const callEffect = EffectTauriLink.call<Record<string, unknown>, TOutput>(
+				commandName,
+				args,
+			);
+
+			const timedEffect =
+				timeoutMs !== undefined
+					? callEffect.pipe(
+							Effect.timeoutOrElse({
+								duration: timeoutMs,
+								orElse: () =>
+									Effect.fail(
+										new TimeoutError({
+											operation: commandName,
+											timeout: timeoutMs,
+										}),
+									),
+							}),
+						)
+					: callEffect;
+
+			const result = yield* timedEffect;
 
 			if (debug) {
 				const logger = yield* Logger;
@@ -156,6 +179,7 @@ export class TauriLink<TContext = unknown> {
 		commandName: string,
 		input: unknown,
 		transportConfig: TauriTransportConfig | undefined,
+		timeoutMs?: number,
 	): AsyncIterableIterator<TOutput> {
 		// Check if transport config has stream ID configuration
 		const hasStreamIdConfig =
@@ -207,6 +231,7 @@ export class TauriLink<TContext = unknown> {
 				streamId: () => streamId,
 				getEventNames: () => eventNames,
 			},
+			timeoutMs,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(
@@ -221,6 +246,7 @@ export class TauriLink<TContext = unknown> {
 		input: unknown,
 		transportConfig: TauriTransportConfig | undefined,
 		onProgress?: (info: ProgressInfo) => void,
+		timeoutMs?: number,
 	): AsyncIterableIterator<TOutput> {
 		const channelConfig =
 			transportConfig?.kind === "channel" ? transportConfig : undefined;
@@ -237,6 +263,7 @@ export class TauriLink<TContext = unknown> {
 			channelParam,
 			onProgress,
 			progressParser: makeProgressParser(channelConfig?.progress),
+			timeoutMs,
 		};
 
 		return EffectTauriLink.stream<unknown, TOutput>(commandName, input, config);

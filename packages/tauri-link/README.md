@@ -709,13 +709,11 @@ oc.meta(
 ### Additional Options
 
 ```typescript
-interface TauriMetadata {
+interface TauriMeta {
   command?: string; // Override command name (optional — derived from route key when omitted)
   transport?: TauriTransportConfig; // Streaming transport config
-  timeout?: number; // Timeout in milliseconds
+  timeout?: number; // Client-side deadline in milliseconds (see below)
   debug?: boolean; // Enable debug logging
-  tags?: string[]; // Categorization tags
-  permissions?: string[]; // Required permissions
 }
 
 // Scoped helpers
@@ -728,25 +726,24 @@ oc.meta(
     command: "fetch_planets", // Optional override
     timeout: 10000,
     debug: true,
-    tags: ["crud", "public"],
-    permissions: ["read:planets"],
   }),
 );
 ```
 
-### Metadata Merging
+### Timeout (`tauri.timeout`)
 
-Array fields (`tags`, `permissions`) are concatenated across multiple `.meta()` calls:
+`tauri.timeout(ms)` applies a **client-side deadline** enforced by the link — the Rust command is unaffected:
+
+- **Unary calls** — the whole call must complete within the window; otherwise the call rejects with `ORPCError("TIMEOUT")` (message: `"command_name timed out after Nms"`).
+- **Streams** — an **inactivity deadline**: the iterator fails when no value arrives within the window. A slow-but-steady stream is never cut; a stalled one fails after the window with an error tagged `TimeoutError` (exported from the package).
 
 ```typescript
-oc.meta(tauri({ tags: ["streaming"], permissions: ["read:data"] })).meta(
-  tauri({ tags: ["realtime"], permissions: ["write:data"] }),
-);
-
-// Result:
-// tags: ["streaming", "realtime"]
-// permissions: ["read:data", "write:data"]
+oc.meta(tauri.channel("on_event")).meta(tauri.timeout(30000));
 ```
+
+### Metadata Merging
+
+Fields across multiple `.meta()` calls are merged (`??` semantics — the latest non-undefined value wins). The `command` name can only be set once; changing it throws.
 
 ---
 
@@ -755,6 +752,8 @@ oc.meta(tauri({ tags: ["streaming"], permissions: ["read:data"] })).meta(
 Rust errors are automatically converted to structured `ORPCError` objects with full type information.
 
 ### Basic Error Handling
+
+The boundary is uniform: **unary calls and stream iteration both reject with `ORPCError`** — Rust command errors, `tauri.timeout` budget breaches (`TIMEOUT` code), and unknown failures are all mapped through the same converter.
 
 ```typescript
 import { ORPCError, isDefinedError } from "@orpc/client";
@@ -772,6 +771,19 @@ try {
     if (error.data) {
       console.error("Details:", error.data);
     }
+  }
+}
+
+// Streams reject the same way
+try {
+  for await (const chunk of await client.file.download_file(
+    { input: { total_bytes: 1024 } },
+  )) {
+    // ...
+  }
+} catch (error) {
+  if (error instanceof ORPCError && error.code === "TIMEOUT") {
+    console.error("Stalled or too slow:", error.data);
   }
 }
 ```

@@ -1,4 +1,5 @@
 import { Context, Stream } from "effect";
+import { toORPCError } from "../error-converter";
 
 /**
  * Converts an Effect.Stream into an AsyncIterableIterator for the public API.
@@ -7,6 +8,10 @@ import { Context, Stream } from "effect";
  * AsyncIterableIterator interface expected by oRPC clients.
  *
  * The stream must have all its service dependencies already provided (R = never).
+ *
+ * Boundary error conversion: stream failures are mapped through `toORPCError`
+ * at this edge — internal typed errors (StreamError, TimeoutError, unknown
+ * causes) surface to consumers as ORPCError, consistent with unary calls.
  *
  * @param stream - The Effect.Stream to convert (with all services provided)
  * @returns AsyncIterableIterator that yields stream values
@@ -26,6 +31,8 @@ export async function* streamToAsyncIterator<T, E>(
 			if (done) break;
 			yield value;
 		}
+	} catch (error) {
+		throw toORPCError(error);
 	} finally {
 		reader.releaseLock();
 	}

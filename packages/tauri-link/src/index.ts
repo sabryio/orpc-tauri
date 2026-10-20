@@ -12,6 +12,7 @@ export {
 	StreamError,
 	TauriInvokeError,
 	TauriListenError,
+	TimeoutError,
 	ValidationError,
 } from "./errors";
 // Export metadata utilities

@@ -29,6 +29,7 @@ export {
 	StreamError,
 	TauriInvokeError,
 	TauriListenError,
+	TimeoutError,
 	ValidationError,
 } from "./errors";
 // Link module - TauriLink class and related types
