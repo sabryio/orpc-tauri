@@ -96,7 +96,7 @@ describe("streamToAsyncIterator", () => {
 			});
 		});
 
-		it("wraps unknown stream errors as INTERNAL_ERROR", async () => {
+		it("wraps unknown stream errors as INTERNAL_SERVER_ERROR", async () => {
 			const stream = Stream.fail({ unexpected: true });
 
 			await expect(
@@ -106,7 +106,7 @@ describe("streamToAsyncIterator", () => {
 					}
 				})(),
 			).rejects.toMatchObject({
-				code: "INTERNAL_ERROR",
+				code: "INTERNAL_SERVER_ERROR",
 			});
 		});
 	});

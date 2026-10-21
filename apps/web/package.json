@@ -17,9 +17,9 @@
   "dependencies": {
     "@orpc-tauri/ui": "workspace:*",
     "orpc-tauri": "workspace:*",
-    "@orpc/client": "^2.0.0-beta.41",
-    "@orpc/contract": "^2.0.0-beta.41",
-    "@orpc/tanstack-query": "^2.0.0-beta.41",
+    "@orpc/client": "2.0.0-beta.44",
+    "@orpc/contract": "2.0.0-beta.44",
+    "@orpc/tanstack-query": "2.0.0-beta.44",
     "@sabryio/orpc-tauri": "npm:@jsr/sabryio__orpc-tauri@^0.1.3",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.104.0",

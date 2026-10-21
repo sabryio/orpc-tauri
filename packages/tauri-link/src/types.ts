@@ -1,4 +1,4 @@
-import type { ORPCError } from "@orpc/client";
+import type { ORPCError, ORPCErrorCode } from "@orpc/client";
 import type { ChannelProgressConfig } from "./streaming/progress-types";
 
 export type Contract = Record<string, unknown>;
@@ -91,7 +91,7 @@ export interface TauriErrorPayload {
 export type StreamEvent<T> =
 	| { type: "value"; value: T }
 	| { type: "done" }
-	| { type: "error"; error: ORPCError<string, unknown> };
+	| { type: "error"; error: ORPCError<ORPCErrorCode, unknown> };
 
 // ============================================================================
 // Options Types

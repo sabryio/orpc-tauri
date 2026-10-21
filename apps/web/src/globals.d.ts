@@ -1,1 +1,1 @@
-/// <reference types="@sabryio/orpc-tauri/augment" />
+/// <reference types="orpc-tauri/augment" />

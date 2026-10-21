@@ -1,4 +1,22 @@
-import { ORPCError } from "@orpc/client";
+import {
+	type AnyORPCError,
+	COMMON_ERROR_STATUS_MAP,
+	ORPCError,
+} from "@orpc/client";
+
+/**
+ * Normalizes a runtime error code so it resolves to a real HTTP status in
+ * `COMMON_ERROR_STATUS_MAP`: known standard codes pass through, legacy
+ * aliases are mapped, and unknown codes fall back to INTERNAL_SERVER_ERROR
+ * (the original value stays in `data.originalCode` so nothing is lost).
+ */
+function toErrorCode(code: string): string {
+	if (code === "INTERNAL" || code === "INTERNAL_ERROR") {
+		return "INTERNAL_SERVER_ERROR";
+	}
+	if (code in COMMON_ERROR_STATUS_MAP) return code;
+	return "INTERNAL_SERVER_ERROR";
+}
 
 /**
  * Converts Effect errors and Tauri error payloads to ORPCError.
@@ -6,7 +24,7 @@ import { ORPCError } from "@orpc/client";
  * Handles unwrapping of Effect errors (TauriInvokeError.cause),
  * preserving Tauri error structure (code/message/data/defined).
  */
-export function toORPCError(error: unknown): ORPCError<string, unknown> {
+export function toORPCError(error: unknown): AnyORPCError {
 	// Timeout budget exceeded (tauri.timeout meta)
 	if (
 		error &&
@@ -68,9 +86,13 @@ export function toORPCError(error: unknown): ORPCError<string, unknown> {
 			defined?: boolean;
 		};
 
-		const orpcError = new ORPCError(tauriError.code, {
+		const normalizedCode = toErrorCode(tauriError.code);
+		const orpcError = new ORPCError(normalizedCode, {
 			message: tauriError.message,
-			data: tauriError.data,
+			data:
+				normalizedCode === tauriError.code
+					? tauriError.data
+					: { originalCode: tauriError.code, data: tauriError.data },
 		});
 
 		// Preserve 'defined' flag for contract-defined errors
@@ -93,13 +115,13 @@ export function toORPCError(error: unknown): ORPCError<string, unknown> {
 
 	// Generic error fallback
 	if (unwrapped instanceof Error) {
-		return new ORPCError("INTERNAL_ERROR", {
+		return new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: unwrapped.message,
 			cause: unwrapped,
 		});
 	}
 
-	return new ORPCError("INTERNAL_ERROR", {
+	return new ORPCError("INTERNAL_SERVER_ERROR", {
 		message: "Unknown error",
 		cause: unwrapped,
 	});
