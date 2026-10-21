@@ -625,9 +625,9 @@ for await (const event of await client.stream.streamEvents(undefined)) {
 }
 ```
 
-### Transfer Progress (Channel Streams)
+### Transfer Progress (Both Streaming Transports)
 
-Channel streams can report transfer progress through **data-less control envelopes** — the SSE envelope's `comment` field carries `progress:<bytesRead>/<totalBytes>`. These never enter the consumer's payload schema, so your output type stays pure.
+Streams can report transfer progress through **data-less control envelopes** — the SSE envelope's `comment` field carries `progress:<bytesRead>/<totalBytes>`, on **both** the channel transport and the listen/SSE transport. These never enter the consumer's payload schema, so your output type stays pure.
 
 **Rust side** — use the built-in builder and throttle (one tick per N chunks is plenty):
 
@@ -669,7 +669,8 @@ Guarantees:
 - Progress envelopes are **swallowed** by the link — they never appear in the async iterator and never touch your Zod schemas
 - Malformed `progress:` comments are ignored silently — control signals can never break a data stream
 - `getEventMeta()` on data envelopes is unchanged
-- Channel transports only: listen-mode (SSE events) streams do not consume progress envelopes
+- Transport parity: `onProgress` fires for channel streams **and** listen-mode (SSE events) streams; without the option, envelopes are swallowed with zero parsing
+- Custom convention per procedure: `tauri.channel("on_event", { prefix: "pct:" })` or `tauri.listen({ parser })`
 
 #### Transfer Progress Setup
 
@@ -703,6 +704,49 @@ declare module "@orpc/client" {
 ```
 
 Either approach makes `onProgress` available at every `client.*` call-site without extra boilerplate.
+
+### Request Context (`TauriLink<TContext>`)
+
+Request-scoped client metadata — the IPC analog of HTTP headers. oRPC clients forward a `context` object to their link; TauriLink makes it real by merging link-level defaults with per-call overrides and injecting the result into the invoke args under the reserved `context` key.
+
+```typescript
+// Typed exactly like OpenAPILink<ClientContext>:
+interface ClientContext {
+  token?: string;
+  xRequestId?: string;
+}
+
+const link = new TauriLink<ClientContext>(contract, {
+  // Link-level defaults: static object, or a factory re-evaluated per call
+  context: () => ({ xRequestId: crypto.randomUUID() }),
+});
+export const client: RouterContractClient<Contract, ClientContext> =
+  createORPCClient(link);
+
+// Per-call override — merged shallowly, per-call wins:
+await client.ping(undefined, { context: { token: "fresh-token" } });
+```
+
+**Rust side** — commands opt in by declaring a `context` parameter; commands that don't are completely untouched, and the contract's Zod schemas are unaffected (it rides next to `streamId`, outside the validated `input` envelope):
+
+```rust
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CallCtx {
+    pub token: Option<String>,
+    pub x_request_id: Option<String>, // ← xRequestId
+}
+
+#[tauri::command]
+pub async fn ping(context: Option<CallCtx>) -> Result<PingResponse, AppError> {
+    if let Some(ctx) = &context {
+        log::info!("ping (x_request_id={:?})", ctx.x_request_id); // correlated logs
+    }
+    // ...
+}
+```
+
+More guardrails: custom `invoke` implementations see the resolved context as part of `args` — there is no separate parameter (the reserved key is the single delivery path). When neither side provides a context, args are left completely untouched (`ping` still sends no args object).
 
 ### Resource-Backed Streams (`tauri.resource`)
 

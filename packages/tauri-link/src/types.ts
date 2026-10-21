@@ -19,6 +19,7 @@ export type TauriTransportConfig =
 					error: string;
 				};
 			};
+			progress?: ChannelProgressConfig;
 	  }
 	| {
 			kind: "channel";
@@ -97,23 +98,41 @@ export type StreamEvent<T> =
 // Options Types
 // ============================================================================
 
-export interface CallOptions<TContext> {
+/**
+ * Call options accepted by `TauriLink.call`.
+ */
+export interface CallOptions<TContext = unknown> {
+	/**
+	 * Request-scoped client context. Merged (shallow, per-call wins) over the
+	 * link-level `context` defaults and injected into the invoke args under
+	 * the reserved `context` key — the IPC analog of HTTP headers. Rust
+	 * commands opt in by declaring `context: Option<CallCtx>`.
+	 */
 	context?: TContext;
 	signal?: AbortSignal;
 	/**
 	 * Transfer progress callback — only meaningful for streaming calls.
-	 * Fires for channel-mode `progress:` control envelopes.
+	 * Fires for `progress:` control envelopes on both transports
+	 * (channel-mode and listen-mode).
 	 */
 	onProgress?: (
 		info: import("./streaming/progress-types").ProgressInfo,
 	) => void;
 }
 
-export interface TauriLinkOptions {
+export interface TauriLinkOptions<TContext = unknown> {
 	logger?: import("./services/logger").SimpleLogger;
 	eventNameStrategy?: import("./streaming/event-name-strategy").EventNameStrategy;
 	invoke?: <T = unknown>(
 		command: string,
 		args?: Record<string, unknown>,
 	) => Promise<T>;
+	/**
+	 * Link-level request context defaults — the IPC analog of static headers.
+	 * A static object, or a function re-evaluated per call (for dynamic
+	 * values like a fresh request id). Merged shallowly with per-call
+	 * `context` (per-call wins) and injected into invoke args under the
+	 * reserved `context` key; see `CallOptions.context`.
+	 */
+	context?: TContext | (() => TContext);
 }

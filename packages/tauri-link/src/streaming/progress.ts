@@ -1,10 +1,11 @@
 /**
- * Transfer progress reporting for channel transports.
+ * Transfer progress reporting for streaming transports.
  *
  * Progress is a control signal: it travels in data-less SSE envelopes
  * (the `comment` field) and never reaches the consumer's payload schema.
  * Format: `progress:<bytesTransferred>/<totalBytes>` — the total part is
  * optional; malformed envelopes are ignored silently, never thrown.
+ * Consumed by both `channel-stream.ts` and `event-stream.ts`.
  */
 import type { ChannelProgressConfig, ProgressInfo } from "./progress-types";
 
@@ -48,7 +49,7 @@ export function parseProgress(
 }
 
 /**
- * Builds the comment parser a channel stream uses to recognize progress
+ * Builds the comment parser a stream uses to recognize progress
  * envelopes, honoring the transport's per-procedure convention
  * (ChannelProgressConfig): a custom `parser` wins; otherwise a `prefix`
  * override renames the built-in "progress:" prefix; otherwise default.

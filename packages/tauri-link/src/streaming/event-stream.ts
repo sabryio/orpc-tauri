@@ -2,6 +2,8 @@ import { Effect, type Stream } from "effect";
 import type { StreamError } from "../errors";
 import type { TauriInvoker } from "../services/invoker";
 import { TauriListener } from "../services/listener";
+import { parseProgress } from "./progress";
+import type { ProgressInfo } from "./progress-types";
 import { attachEventMeta, type SseEvent } from "./sse-types";
 import {
 	captureHandleAnnouncement,
@@ -30,11 +32,18 @@ export interface EventStreamConfig {
  * SRP: Single responsibility - orchestrating event listeners into a stream.
  *
  * Automatically cleans up all event listeners when the stream ends (via Scope).
+ *
+ * Progress parity with the channel transport: data-less `progress:` comment
+ * envelopes fire `onProgress` and are never yielded as payload. Only parsed
+ * when the consumer passed `onProgress` (zero work otherwise), mirroring
+ * `channel-stream.ts`.
  */
 export const createEventStream = <T>(
 	command: string,
 	input: unknown,
 	config: EventStreamConfig,
+	onProgress?: (info: ProgressInfo) => void,
+	progressParser?: (comment: string) => ProgressInfo | undefined,
 	resource?: { readonly autoClose?: boolean },
 ): Stream.Stream<T, StreamError, TauriInvoker | TauriListener> =>
 	createQueueStream<T, TauriInvoker | TauriListener>((emit) =>
@@ -56,6 +65,19 @@ export const createEventStream = <T>(
 					if (sseEvent.data === undefined) return;
 				}
 
+				// Progress: data-less envelopes fire the callback, never
+				// yielded. Payload-riding comments don't fire progress —
+				// same precedence as the channel transport.
+				if (sseEvent.data === undefined && onProgress !== undefined) {
+					const info = progressParser
+						? progressParser(sseEvent.comment ?? "")
+						: parseProgress(sseEvent.comment ?? "");
+					if (info) {
+						onProgress(info);
+						return;
+					}
+				}
+
 				if (sseEvent.data !== undefined) {
 					const value = sseEvent.data;
 					attachEventMeta(value, sseEvent);
@@ -74,7 +96,9 @@ export const createEventStream = <T>(
 				resourceTeardown(ridSlot, resource, exit),
 			);
 
-			// Start the stream by invoking the command (fork it so we don't block)
+			// Start the stream by invoking the command (fork it so we don't
+			// block); the request context rides inside the args under the
+			// reserved `context` key — injected by the public API.
 			yield* forkInvoke(
 				command,
 				{

@@ -186,5 +186,25 @@ describe("derived command names", () => {
 
 			expect(custom.transport?.progress).toEqual({ parser });
 		});
+
+		it("tauri.listen attaches the progress convention to the transport", () => {
+			const meta = tauri.listen({ prefix: "pct:" }).init({})[
+				"~tauri" as never
+			] as unknown as {
+				transport?: { kind: string; progress?: unknown };
+			};
+
+			expect(meta.transport).toEqual({
+				kind: "listen",
+				progress: { prefix: "pct:" },
+			});
+
+			// No argument stays the bare baseline (backward compatible)
+			const plain = tauri.listen().init({})["~tauri" as never] as unknown as {
+				transport?: { kind: string };
+			};
+
+			expect(plain.transport).toEqual({ kind: "listen" });
+		});
 	});
 });

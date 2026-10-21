@@ -3,7 +3,12 @@ import { Context, Effect, Layer } from "effect";
 import { TauriInvokeError } from "../errors";
 
 /**
- * Custom invoke function type - matches Tauri's invoke signature
+ * Custom invoke function type - matches Tauri's invoke signature.
+ *
+ * Request context (link-level defaults merged with per-call overrides)
+ * arrives inside `args` under the reserved `context` key — there is no
+ * separate parameter; Rust commands opt in by declaring a `context`
+ * argument.
  */
 export type InvokeFn = <T = unknown>(
 	command: string,
@@ -50,7 +55,9 @@ export const TauriInvokerLive = Layer.succeed(
  *
  * Useful for testing, middleware, or custom IPC implementations.
  */
-export function fromCustomInvoke(customInvoke: InvokeFn): Layer.Layer<TauriInvoker> {
+export function fromCustomInvoke(
+	customInvoke: InvokeFn,
+): Layer.Layer<TauriInvoker> {
 	return Layer.succeed(
 		TauriInvoker,
 		TauriInvoker.of({

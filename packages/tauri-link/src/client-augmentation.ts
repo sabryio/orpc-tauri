@@ -22,8 +22,9 @@ import type { ProgressInfo } from "./streaming/progress-types";
 declare module "@orpc/client" {
 	interface ClientOptions<T> {
 		/**
-		 * Transfer progress callback — fires for channel-mode streams
-		 * (data-less `progress:` control envelopes; see ProgressInfo).
+		 * Transfer progress callback — fires for streaming calls on both
+		 * transports (channel and listen), data-less `progress:` control
+		 * envelopes; see ProgressInfo.
 		 */
 		onProgress?: (info: ProgressInfo) => void;
 	}

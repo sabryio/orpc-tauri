@@ -1,7 +1,8 @@
 /**
  * Typed shape of a transfer progress tick.
  *
- * Fired via the `onProgress` call option for channel-mode streams.
+ * Fired via the `onProgress` call option for streaming calls on both
+ * transports (channel and listen).
  * Never part of the consumer's Zod payload schema — see streaming/progress.ts.
  */
 export interface ProgressInfo {
@@ -14,7 +15,8 @@ export interface ProgressInfo {
 }
 
 /**
- * Per-procedure progress convention for channel transports.
+ * Per-procedure progress convention for streaming transports
+ * (channel and listen).
  *
  * `prefix` renames the built-in `progress:` prefix.
  * `parser` fully owns recognition — it wins over `prefix` and receives every

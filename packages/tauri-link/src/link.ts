@@ -28,14 +28,14 @@ export interface StreamConfig {
 	readonly listenConfig?: EventStreamConfig;
 	readonly channelParam?: string;
 	/**
-	 * Progress callback for channel-mode streams. Fires for data-less
-	 * progress control envelopes; never called for yielded values.
+	 * Progress callback for streaming calls (both transports). Fires for
+	 * data-less progress control envelopes; never called for yielded values.
 	 */
 	readonly onProgress?: (info: ProgressInfo) => void;
 	/**
-	 * Comment parser that recognizes progress envelopes in channel-mode
-	 * streams (procedure-level convention from transport meta). Falls back
-	 * to the built-in `progress:` parser when omitted.
+	 * Comment parser that recognizes progress envelopes in streams
+	 * (procedure-level convention from transport meta). Falls back to the
+	 * built-in `progress:` parser when omitted.
 	 */
 	readonly progressParser?: (comment: string) => ProgressInfo | undefined;
 	/**
@@ -126,6 +126,8 @@ export class EffectTauriLink {
 				command,
 				input,
 				config.listenConfig,
+				config.onProgress,
+				config.progressParser,
 				config.resource,
 			);
 		} else if (config.mode === "channel" && config.channelParam) {

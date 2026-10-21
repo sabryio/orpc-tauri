@@ -1,4 +1,5 @@
 import { Effect, Layer } from "effect";
+import { injectContextArg, resolveCallContext } from "./call-context";
 import { camelCase } from "./casing";
 import { DEFAULT_PARAMS, GLOBAL_EVENT_NAMES } from "./constants";
 import { toORPCError } from "./error-converter";
@@ -25,17 +26,37 @@ import type {
 } from "./types";
 
 /**
+ * Named boundary cast for streaming returns.
+ *
+ * For streaming procedures the link only ever produces the payload iterator;
+ * oRPC's client owns the full `TOutput` contract shape (the `IteratorObject`
+ * wrapper, `.streamed()` chainable, and friends), so the link's local typing
+ * is deliberately narrower than the real `TOutput`. This helper documents
+ * that boundary in one place instead of a bare `as TOutput` at every
+ * streaming callsite — oRPC owns the type contract, the link contributes
+ * only the values.
+ */
+const asProducer = <T>(it: AsyncIterableIterator<T>): T => it as T;
+
+/**
  * Promise-based TauriLink facade over Effect implementation.
  *
  * Use `new TauriLink(contract, options)` for synchronous construction (throws on validation errors).
  * Or use `TauriLink.make()` factory for Effect-based construction with typed errors.
+ *
+ * `TauriLink<TContext>` types the request context (mirrors `OpenAPILink<TContext>`
+ * — context is data-associated with calls, no HTML headers over IPC): link-level
+ * defaults merge with per-call `context` (per-call wins) and are injected into
+ * invoke args under the reserved `context` key, plus mirrored to a custom
+ * `invoke`'s third argument. Rust commands opt in via `context: Option<CallCtx>`.
  */
 export class TauriLink<TContext = unknown> {
 	private readonly resolver: ProcedureResolver;
 	private readonly appLayer;
 	private readonly eventNameStrategy: EventNameStrategy;
+	private readonly contextDefaults: TContext | (() => TContext) | undefined;
 
-	constructor(contract: Contract, options?: TauriLinkOptions) {
+	constructor(contract: Contract, options?: TauriLinkOptions<TContext>) {
 		const loggerLayer = options?.logger
 			? fromSimpleLogger(options.logger)
 			: ConsoleLoggerLive;
@@ -51,6 +72,7 @@ export class TauriLink<TContext = unknown> {
 		);
 		this.eventNameStrategy =
 			options?.eventNameStrategy ?? new DefaultEventNameStrategy();
+		this.contextDefaults = options?.context;
 		this.resolver = new ProcedureResolver(contract);
 
 		// Run validation synchronously
@@ -64,7 +86,7 @@ export class TauriLink<TContext = unknown> {
 	 */
 	static make<TContext = unknown>(
 		contract: Contract,
-		options?: TauriLinkOptions,
+		options?: TauriLinkOptions<TContext>,
 	): Effect.Effect<TauriLink<TContext>, ContractValidationError> {
 		return Effect.gen(function* () {
 			yield* validateContract(contract);
@@ -105,38 +127,57 @@ export class TauriLink<TContext = unknown> {
 			// Client-side deadline from `tauri.timeout(...)` meta
 			const timeoutMs = self.resolver.getTimeout(path);
 
+			// Request context: link-level defaults merged with the per-call
+			// override (per-call wins). Injected into invoke args under the
+			// reserved `context` key; Rust commands opt in via
+			// `context: Option<CallCtx>`.
+			const context = resolveCallContext(
+				self.contextDefaults,
+				callOptions?.context,
+			);
+
 			// Handle streaming vs unary
 			if (self.resolver.isStreaming(path)) {
 				const transport = self.resolver.getTransport(path);
 				const transportConfig = self.resolver.getTransportConfig(path);
 
+				// Same injection as unary: the reserved `context` key rides the
+				// args (next to streamId/eventNames/the channel param). No
+				// separate parameter — the args are the single delivery path.
+				const streamInput = injectContextArg(input, context);
+
 				if (transport === "channel") {
-					return self.createChannelStream<TOutput>(
+					return asProducer(
+						self.createChannelStream<TOutput>(
+							commandName,
+							streamInput,
+							transportConfig,
+							callOptions?.onProgress,
+							timeoutMs,
+							callOptions?.signal,
+							self.resolver.getResource(path),
+						),
+					);
+				}
+
+				return asProducer(
+					self.createEventStream<TOutput>(
 						commandName,
-						input,
+						streamInput,
 						transportConfig,
 						callOptions?.onProgress,
 						timeoutMs,
 						callOptions?.signal,
 						self.resolver.getResource(path),
-					) as TOutput;
-				}
-
-				return self.createEventStream<TOutput>(
-					commandName,
-					input,
-					transportConfig,
-					timeoutMs,
-					callOptions?.signal,
-					self.resolver.getResource(path),
-				) as TOutput;
+					),
+				);
 			}
 
 			// Unary call - pass input directly without wrapping
-			const args = (input === undefined ? undefined : input) as Record<
-				string,
-				unknown
-			>;
+			const args = injectContextArg(
+				input === undefined ? undefined : input,
+				context,
+			) as Record<string, unknown>;
 			const callEffect = EffectTauriLink.call<Record<string, unknown>, TOutput>(
 				commandName,
 				args,
@@ -186,31 +227,34 @@ export class TauriLink<TContext = unknown> {
 		commandName: string,
 		input: unknown,
 		transportConfig: TauriTransportConfig | undefined,
+		onProgress?: (info: ProgressInfo) => void,
 		timeoutMs?: number,
 		signal?: AbortSignal,
 		resource?: TauriResourceConfig,
 	): AsyncIterableIterator<TOutput> {
+		const listenConfig =
+			transportConfig?.kind === "listen" ? transportConfig : undefined;
+
 		// Check if transport config has stream ID configuration
-		const hasStreamIdConfig =
-			transportConfig?.kind === "listen" && transportConfig.id;
+		const hasStreamIdConfig = listenConfig?.id !== undefined;
 
 		let streamId: string;
 		let eventNames: { data: string; error: string; done: string };
 		let inputWithStreamParams: unknown;
 
-		if (hasStreamIdConfig && transportConfig.kind === "listen") {
+		if (hasStreamIdConfig && listenConfig) {
 			// Case 1: Unique stream ID per call (default behavior)
-			const idValue = transportConfig.id!.value;
+			const idValue = listenConfig.id!.value;
 			streamId = typeof idValue === "function" ? idValue() : idValue;
 
 			// Use custom event generator or default strategy
-			if (transportConfig.events) {
-				eventNames = transportConfig.events.generator(streamId);
+			if (listenConfig.events) {
+				eventNames = listenConfig.events.generator(streamId);
 				// Include both streamId and eventNames in input
 				inputWithStreamParams = {
 					...(input as Record<string, unknown>),
-					[transportConfig.id!.name]: streamId,
-					[transportConfig.events.name]: eventNames,
+					[listenConfig.id!.name]: streamId,
+					[listenConfig.events.name]: eventNames,
 				};
 			} else {
 				// Use default event name strategy with unique stream ID
@@ -218,7 +262,7 @@ export class TauriLink<TContext = unknown> {
 				// Include only streamId in input
 				inputWithStreamParams = {
 					...(input as Record<string, unknown>),
-					[transportConfig.id!.name]: streamId,
+					[listenConfig.id!.name]: streamId,
 				};
 			}
 		} else {
@@ -240,6 +284,8 @@ export class TauriLink<TContext = unknown> {
 				streamId: () => streamId,
 				getEventNames: () => eventNames,
 			},
+			onProgress,
+			progressParser: makeProgressParser(listenConfig?.progress),
 			timeoutMs,
 			signal,
 			resource,

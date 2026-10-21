@@ -44,7 +44,9 @@ export const tauri = ((incoming: Partial<TauriMeta>): MetaPlugin => ({
 	(meta: Partial<TauriMeta>): MetaPlugin;
 	command(command: string): MetaPlugin;
 	transport(config: TauriTransportConfig): MetaPlugin;
-	listen(): MetaPlugin;
+	listen(
+		progress?: Extract<TauriTransportConfig, { kind: "listen" }>["progress"],
+	): MetaPlugin;
 	channel(
 		id?: Extract<TauriTransportConfig, { kind: "channel" }>["id"],
 		progress?: Extract<TauriTransportConfig, { kind: "channel" }>["progress"],
@@ -62,7 +64,22 @@ tauri.command = (command): MetaPlugin => tauri({ command });
 
 tauri.transport = (config): MetaPlugin => tauri({ transport: config });
 
-tauri.listen = (): MetaPlugin => tauri({ transport: { kind: "listen" } });
+/**
+ * SSE/listen streaming helper.
+ *
+ * `progress` customizes the transfer-progress convention for this procedure
+ * (parity with the channel transport): `prefix` renames the built-in
+ * `progress:` prefix; `parser` fully owns recognition (wins over `prefix`).
+ * Omit for the standard convention.
+ */
+tauri.listen = (
+	progress?: Extract<TauriTransportConfig, { kind: "listen" }>["progress"],
+): MetaPlugin =>
+	tauri({
+		transport: progress
+			? ({ kind: "listen", progress } as TauriTransportConfig)
+			: { kind: "listen" },
+	});
 
 /**
  * Channel streaming helper.

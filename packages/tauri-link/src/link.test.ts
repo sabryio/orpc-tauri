@@ -48,6 +48,29 @@ describe("EffectTauriLink", () => {
 
 			expect(result._tag).toBe("Failure");
 		});
+
+		it("forwards args untouched to the invoker (context rides inside args at the public API)", async () => {
+			let captured: Record<string, unknown> | undefined;
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>(_command: string, args?: Record<string, unknown>) => {
+						captured = args;
+						return Effect.succeed(null as T);
+					},
+				}),
+			);
+
+			await Effect.runPromise(
+				EffectTauriLink.call("trace_command", { id: 7 }).pipe(
+					Effect.provide(mockInvoker),
+				),
+			);
+
+			// At this raw-driver level args pass through as-is; the reserved
+			// `context` key is injected one layer up, in the public API.
+			expect(captured).toEqual({ id: 7 });
+		});
 	});
 
 	describe("stream", () => {
@@ -312,6 +335,81 @@ describe("EffectTauriLink", () => {
 				command: "plugin:resources|close",
 				args: { rid: 13 },
 			});
+		});
+	});
+
+	describe("request context dispatch", () => {
+		it("streams carry the reserved `context` key inside the invoke args", async () => {
+			let captured: Record<string, unknown> | undefined;
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>(_command: string, args?: Record<string, unknown>) => {
+						captured = args;
+						// Forked invoke runs to completion immediately
+						return Effect.succeed(null as T);
+					},
+				}),
+			);
+			const mockListener = Layer.succeed(
+				TauriListener,
+				TauriListener.of({
+					// Fire `done` as soon as the done listener is registered - the
+					// stream completes immediately, so consumption ends naturally.
+					listen: <T>(_event: string, handler: (payload: T) => void) =>
+						Effect.sync(() => {
+							if (_event.includes("done")) {
+								setTimeout(() => handler({} as T), 1);
+							}
+							return Effect.void;
+						}) as unknown as Effect.Effect<void>,
+				}),
+			);
+			const mockChannelFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: <T>() =>
+						Effect.succeed({ onmessage: null } as unknown as T),
+				}),
+			);
+			const mockLayer = Layer.mergeAll(
+				mockInvoker,
+				mockListener,
+				mockChannelFactory,
+			);
+
+			const iterator = EffectTauriLink.stream<unknown, string>(
+				"trace_stream",
+				// The public API injects the resolved context under the reserved
+				// key before the dispatch layer ever sees the args.
+				{ seed: 1, context: { correlationId: "trace-42" } },
+				{
+					mode: "listen",
+					listenConfig: {
+						streamId: () => "trace-stream-id",
+						getEventNames: (id: string) => ({
+							data: `${id}:data`,
+							error: `${id}:error`,
+							done: `${id}:done`,
+						}),
+					},
+				},
+				mockLayer,
+			);
+
+			// The first pull runs the scope setup, which forks the invoke;
+			// done completes the iterator right after.
+			for await (const _value of iterator) {
+				void _value;
+			}
+
+			expect(captured).toEqual(
+				expect.objectContaining({
+					seed: 1,
+					streamId: "trace-stream-id",
+					context: { correlationId: "trace-42" },
+				}),
+			);
 		});
 	});
 });
