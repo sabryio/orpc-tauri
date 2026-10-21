@@ -139,6 +139,36 @@ serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 ```
 
+> **How the input envelope maps to command args:** oRPC clients invoke every
+> procedure with a `{ input: { ... } }` envelope. Tauri maps top-level JSON
+> keys to *named command arguments*, so that wrapper key becomes the
+> command's `input` parameter and its fields are the inner object — no
+> unwrapping code is needed and the Rust struct stays flat:
+>
+> ```typescript
+> // contract.ts — consumer calls client.planet.find_planet({ input: { id: 1 } })
+> find_planet: oc
+> 	.input(z.object({ input: z.object({ id: z.number().int() }) }))
+> 	.output(PlanetSchema),
+> ```
+>
+> ```rust
+> #[derive(serde::Deserialize)]
+> pub struct FindPlanetInput {
+>     pub id: i64,
+> }
+>
+> #[tauri::command]
+> pub async fn find_planet(input: FindPlanetInput) -> Result<Planet, AppError> {
+>     // ...
+> }
+> ```
+>
+> The same one-key-per-argument mapping applies to streaming channel params
+> (`tauri.channel("on_event")` arrives as the `on_event: Channel<...>`
+> parameter) and to the reserved `context` key (see
+> [Request Context](#request-context-taurilinktcontext)).
+
 ### Step 4: Create the Client
 
 Wire up your contract with TauriLink to create a type-safe client.

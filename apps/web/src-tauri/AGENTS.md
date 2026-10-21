@@ -42,6 +42,7 @@ cargo tauri build
 - State managed via `tauri::State<T>` for shared data (PlanetStore)
 - SSE streaming: emit events via `app.emit()`, listen on frontend via event names
 - Channel streaming: accept `Channel<Event<T>>` parameter, send via `channel.send()`
+- Input mapping: the oRPC client sends invoke args `{ input: { ... } }` (the link adds `onEvent`/`context` alongside); Tauri maps top-level JSON keys to *named command arguments*, so the `input` wrapper key becomes the command's `input` parameter and its fields stay flat (`DbOpenInput { path }`, `UploadFileInput { content, filename }`) — no unwrapping code, never define a nested `input` field inside the struct
 - Transfer progress: send data-less `Event::default().progress(read, total)` envelopes via channels (throttled, every N chunks); always end channel streams with a `done` event
 - Resource-backed stream commands (`tauri.resource()` meta): register the task handle in `app.resources_table()` (AppHandle param via `tauri::Manager`), announce it once with `Event::default().handle(rid)`, poll the cancel token in the loop, and drop the own rid (`resources_table().close(rid)`) on normal completion — no `done` after a cancel
 - Resource close is the server-side cancellation hook: implement `Resource::close(self)` to cancel pending work (see `commands/resource.rs`: `DatabaseConn`, `TransferHandle`)
