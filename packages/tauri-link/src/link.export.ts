@@ -18,19 +18,17 @@
  */
 
 // Typed errors
-import type { ProgressInfo } from "./streaming/progress-types";
-
 export {
-	AbortError,
-	type CallError,
-	ContractValidationError,
-	MissingCommandMetadataError,
-	ProcedureNotFoundError,
-	StreamError,
-	TauriInvokeError,
-	TauriListenError,
-	TimeoutError,
-	ValidationError,
+  AbortError,
+  type CallError,
+  ContractValidationError,
+  MissingCommandMetadataError,
+  ProcedureNotFoundError,
+  StreamError,
+  TauriInvokeError,
+  TauriListenError,
+  TimeoutError,
+  ValidationError,
 } from "./errors";
 // Link module - TauriLink class and related types
 export { TauriLink } from "./public-api";
@@ -44,8 +42,8 @@ export type { SimpleLogger } from "./services/logger";
 export { ConsoleLogger, NoopLogger } from "./services/logger";
 export { closeResource, RESOURCE_CLOSE_COMMAND } from "./services/resource";
 export type {
-	EventNameStrategy,
-	StreamEventNames,
+  EventNameStrategy,
+  StreamEventNames,
 } from "./streaming/event-name-strategy";
 // Event name strategy
 export { DefaultEventNameStrategy } from "./streaming/event-name-strategy";
@@ -53,32 +51,17 @@ export { HANDLE_PREFIX, parseHandleEnvelope } from "./streaming/handle";
 export { PROGRESS_PREFIX } from "./streaming/progress";
 // Transfer progress (channel streams)
 export type {
-	ChannelProgressConfig,
-	ProgressInfo,
+  ChannelProgressConfig,
+  ProgressInfo,
 } from "./streaming/progress-types";
 // SSE types
 export type { EventMeta, SseEvent } from "./streaming/sse-types";
 export { EVENT_META_SYMBOL } from "./streaming/sse-types";
 // Core types
 export type {
-	CallOptions,
-	Contract,
-	StreamEvent,
-	TauriErrorPayload,
-	TauriLinkOptions,
+  CallOptions,
+  Contract,
+  StreamEvent,
+  TauriErrorPayload,
+  TauriLinkOptions,
 } from "./types";
-
-// ============================================================================
-// Ambient augmentation (shipped so consumers get typed `onProgress` with zero
-// boilerplate). Source of truth: src/client-augmentation.ts — keep identical.
-// ============================================================================
-
-declare module "@orpc/client" {
-	interface ClientOptions<T> {
-		/**
-		 * Transfer progress callback — fires for channel-mode streams
-		 * (data-less `progress:` control envelopes; see ProgressInfo).
-		 */
-		onProgress?: (info: ProgressInfo) => void;
-	}
-}

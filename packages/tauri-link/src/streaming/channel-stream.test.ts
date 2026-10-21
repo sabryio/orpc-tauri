@@ -411,7 +411,7 @@ describe("createChannelStream", () => {
 
 				// `{end}` arrives → Tauri's own cleanup runs (routed through the
 				// link's once-guard) and cancels the grace timer.
-				mockChannel.cleanupCallback?.();
+				(mockChannel as any).cleanupCallback?.();
 				expect(cleanupCalls).toBe(1);
 				await vi.advanceTimersByTimeAsync(10_001);
 				expect(cleanupCalls).toBe(1);

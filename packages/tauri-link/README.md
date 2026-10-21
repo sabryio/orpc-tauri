@@ -27,14 +27,14 @@
 
 ## Features
 
-| Feature                   | Description                                        |
-| ------------------------- | -------------------------------------------------- |
-| 🔗 **oRPC Integration**   | Seamless integration with oRPC contracts           |
-| 📡 **Dual Streaming**     | Event-based (SSE-style) and Channel API streaming  |
-| 🎯 **Type-Safe**          | Full TypeScript support with inferred types        |
-| 🏗️ **Clean Architecture** | SOLID principles with Effect TypeScript internals  |
-| 🔍 **Metadata-Driven**    | Configure transport behavior via contract metadata |
-| ⚡ **Resource Safe**      | Automatic cleanup and memory management            |
+| Feature                   | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| 🔗 **oRPC Integration**   | Seamless integration with oRPC contracts              |
+| 📡 **Dual Streaming**     | Event-based (SSE-style) and Channel API streaming     |
+| 🎯 **Type-Safe**          | Full TypeScript support with inferred types           |
+| 🏗️ **Clean Architecture** | SOLID principles with Effect TypeScript internals     |
+| 🔍 **Metadata-Driven**    | Configure transport behavior via contract metadata    |
+| ⚡ **Resource Safe**      | Automatic cleanup and memory management               |
 | ✅ **Rust Resources**     | Resource-backed streams with server-side cancellation |
 
 ## Installation
@@ -642,7 +642,7 @@ on_event.send(Event::default().progress(bytes_read, total))?;
 on_event.send(Event::default().event("done"))?;
 ```
 
-**TypeScript side** — pass the typed `onProgress` call option (typing ships with the package via an ambient `@orpc/client` augmentation — no `declare module` needed in your app):
+**TypeScript side** — pass the typed `onProgress` call option. To get `onProgress` typed on every call-site, add the ambient augmentation once (see [Transfer Progress Setup](#transfer-progress-setup) below):
 
 ```typescript
 import type { ProgressInfo } from "@sabryio/orpc-tauri/link";
@@ -651,9 +651,9 @@ const iterator = await client.file.download_file(
   { input: { path: "/data/model.bin" } },
   {
     onProgress: (info: ProgressInfo) => {
-      console.log(`${info.percentage}%`);      // 0-100, when total is known
-      console.log(info.bytesTransferred);      // cumulative
-      console.log(info.totalBytes);            // optional
+      console.log(`${info.percentage}%`); // 0-100, when total is known
+      console.log(info.bytesTransferred); // cumulative
+      console.log(info.totalBytes); // optional
     },
   },
 );
@@ -670,6 +670,28 @@ Guarantees:
 - Malformed `progress:` comments are ignored silently — control signals can never break a data stream
 - `getEventMeta()` on data envelopes is unchanged
 - Channel transports only: listen-mode (SSE events) streams do not consume progress envelopes
+
+#### Transfer Progress Setup
+
+`onProgress` is typed via an ambient augmentation of `@orpc/client`. Because JSR prohibits packages from modifying global types automatically, the augmentation ships as an **opt-in subpath** — add it once to your project:
+
+**Option A — triple-slash reference in a `.d.ts` file (recommended)**
+
+Create `src/globals.d.ts` (or any `.d.ts` TypeScript picks up):
+
+```ts
+/// <reference types="@sabryio/orpc-tauri/augment" />
+```
+
+**Option B — side-effect import**
+
+Add it once anywhere that runs before your first `onProgress` usage, e.g. `main.tsx`:
+
+```ts
+import "@sabryio/orpc-tauri/augment";
+```
+
+Either approach makes `onProgress` available in every `client.*` call-site without any extra boilerplate.
 
 ### Resource-Backed Streams (`tauri.resource`)
 
@@ -733,7 +755,7 @@ Lifecycle guarantees:
 - `tauri.resource({ autoClose: false })` makes the resource fully manual
 - Auto-close is **best-effort, never silent**: close failures don't mask the stream's own exit cause, but they ARE logged loudly (`Failed to close Rust resource rid=N … Cause: …`) — a failed close leaves the Rust task running
 - `link.resource.close()` **rejects** on failure (ORPCError at the boundary) — a failed "close" is never a silent success
-- Works in both transports (channel and listen); the close invoke uses the `plugin:resources|close` IPC, which requires the **`core:resources:allow-close`** capability — grant it explicitly in `src-tauri/capabilities/*.json` (`"core:default"` alone has been observed *not* to include it: the invoke fails with `resources.close not allowed`)
+- Works in both transports (channel and listen); the close invoke uses the `plugin:resources|close` IPC, which requires the **`core:resources:allow-close`** capability — grant it explicitly in `src-tauri/capabilities/*.json` (`"core:default"` alone has been observed _not_ to include it: the invoke fails with `resources.close not allowed`)
 - If the abort lands before the first chunk arrives, no rid has been announced — nothing to close, nothing leaks (the Rust task finishes on its own)
 - Unary procedures may carry `tauri.resource()` too — it's a no-op for the link lifecycle (close stays manual via the facade)
 
@@ -874,9 +896,9 @@ try {
 
 // Streams reject the same way
 try {
-  for await (const chunk of await client.file.download_file(
-    { input: { total_bytes: 1024 } },
-  )) {
+  for await (const chunk of await client.file.download_file({
+    input: { total_bytes: 1024 },
+  })) {
     // ...
   }
 } catch (error) {
@@ -955,9 +977,19 @@ import type { ProgressInfo } from "@sabryio/orpc-tauri/link";
 import { PROGRESS_PREFIX } from "@sabryio/orpc-tauri/link";
 
 // Rust resources (Tauri Resource protocol)
-import { asResourceHandle, HANDLE_PREFIX, parseHandleEnvelope } from "@sabryio/orpc-tauri/link";
+import {
+  asResourceHandle,
+  HANDLE_PREFIX,
+  parseHandleEnvelope,
+} from "@sabryio/orpc-tauri/link";
 import type { RustResourceHandle } from "@sabryio/orpc-tauri/link";
 // link.resource.close(handle) — the facade on TauriLink (see above)
+
+// Ambient augmentation — adds typed `onProgress` to every call-site (opt-in)
+// Add once via triple-slash reference in a .d.ts file:
+//   /// <reference types="@sabryio/orpc-tauri/augment" />
+// Or as a side-effect import:
+//   import "@sabryio/orpc-tauri/augment";
 
 // Types
 import type { TauriLinkOptions, SimpleLogger } from "@sabryio/orpc-tauri/link";
@@ -1001,7 +1033,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Add custom middleware (auth, logging, etc.)
 const link = new TauriLink(contract, {
-  invoke: async <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> => {
+  invoke: async <T = unknown>(
+    command: string,
+    args?: Record<string, unknown>,
+  ): Promise<T> => {
     console.log(`[Invoke] ${command}`, args);
 
     try {
@@ -1020,7 +1055,10 @@ const link = new TauriLink(contract, {
 
 ```typescript
 const link = new TauriLink(contract, {
-  invoke: async <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> => {
+  invoke: async <T = unknown>(
+    command: string,
+    args?: Record<string, unknown>,
+  ): Promise<T> => {
     // Return mock data - no need to mock Tauri API
     return { id: 1, name: "Test User" } as T;
   },
