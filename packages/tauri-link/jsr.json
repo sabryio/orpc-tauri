@@ -5,8 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./link": "./src/link.export.ts",
-    "./meta": "./src/meta.export.ts",
-    "./augment": "./src/client-augmentation.ts"
+    "./meta": "./src/meta.export.ts"
   },
   "publish": {
     "include": [
@@ -16,7 +15,8 @@
     ],
     "exclude": [
       "**/*.test.ts",
-      "**/*.spec.ts"
+      "**/*.spec.ts",
+      "src/client-augmentation.ts"
     ]
   }
 }

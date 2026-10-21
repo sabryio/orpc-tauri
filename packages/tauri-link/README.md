@@ -673,9 +673,9 @@ Guarantees:
 
 #### Transfer Progress Setup
 
-`onProgress` is typed via an ambient augmentation of `@orpc/client`. Because JSR prohibits packages from modifying global types automatically, the augmentation ships as an **opt-in subpath** — add it once to your project:
+`onProgress` is typed via an ambient augmentation of `@orpc/client`. The `./augment` subpath is available for **npm installs** only — JSR prohibits packages from including module augmentation files.
 
-**Option A — triple-slash reference in a `.d.ts` file (recommended)**
+**npm — triple-slash reference in a `.d.ts` file (recommended)**
 
 Create `src/globals.d.ts` (or any `.d.ts` TypeScript picks up):
 
@@ -683,15 +683,26 @@ Create `src/globals.d.ts` (or any `.d.ts` TypeScript picks up):
 /// <reference types="@sabryio/orpc-tauri/augment" />
 ```
 
-**Option B — side-effect import**
-
-Add it once anywhere that runs before your first `onProgress` usage, e.g. `main.tsx`:
+**npm — side-effect import**
 
 ```ts
 import "@sabryio/orpc-tauri/augment";
 ```
 
-Either approach makes `onProgress` available in every `client.*` call-site without any extra boilerplate.
+**JSR / Deno — add one `declare module` block to your project**
+
+```ts
+// e.g. src/globals.d.ts
+import type { ProgressInfo } from "@sabryio/orpc-tauri/link";
+
+declare module "@orpc/client" {
+  interface ClientOptions<T> {
+    onProgress?: (info: ProgressInfo) => void;
+  }
+}
+```
+
+Either approach makes `onProgress` available at every `client.*` call-site without extra boilerplate.
 
 ### Resource-Backed Streams (`tauri.resource`)
 
@@ -985,11 +996,10 @@ import {
 import type { RustResourceHandle } from "@sabryio/orpc-tauri/link";
 // link.resource.close(handle) — the facade on TauriLink (see above)
 
-// Ambient augmentation — adds typed `onProgress` to every call-site (opt-in)
-// Add once via triple-slash reference in a .d.ts file:
-//   /// <reference types="@sabryio/orpc-tauri/augment" />
-// Or as a side-effect import:
-//   import "@sabryio/orpc-tauri/augment";
+// Ambient augmentation — adds typed `onProgress` to every call-site (npm only)
+// Triple-slash in a .d.ts:  /// <reference types="@sabryio/orpc-tauri/augment" />
+// Side-effect import:       import "@sabryio/orpc-tauri/augment";
+// JSR/Deno: add a declare module block manually (see Transfer Progress Setup)
 
 // Types
 import type { TauriLinkOptions, SimpleLogger } from "@sabryio/orpc-tauri/link";
