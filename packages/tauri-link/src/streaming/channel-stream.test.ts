@@ -483,7 +483,13 @@ describe("createChannelStream", () => {
 		});
 	});
 
-	describe("rust resources (tauri.resource)", () => {
+	describe("rust resources (handle:<rid> envelope — tauri.resource() meta optional)", () => {
+		// NOTE: `resource` (the link-level config that meta.tauri.resource()
+		// resolves to) is NOT passed in the default tests here on purpose:
+		// detection is envelope-driven. Any backend that emits the data-less
+		// `handle:<rid>` comment envelope gets auto-closed on abnormal exits
+		// WITHOUT declaring tauri.resource() in the contract; the meta exists
+		// only for the `autoClose: false` opt-out and contract documentation.
 		interface CloseCall {
 			command: string;
 			args?: Record<string, unknown>;

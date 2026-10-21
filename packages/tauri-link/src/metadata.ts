@@ -108,13 +108,18 @@ tauri.channel = (id?: { name: string } | string, progress?): MetaPlugin => {
 tauri.timeout = (timeout): MetaPlugin => tauri({ timeout });
 
 /**
- * Marks a procedure as Rust-resource-backed (Tauri Resource protocol).
+ * Documents a procedure as Rust-resource-backed (Tauri Resource protocol).
  *
  * For streaming procedures the Rust command announces its task handle with a
  * data-less `handle:<rid>` control envelope; with the default `autoClose`,
  * the link closes that resource when the stream exits abnormally (consumer
  * abort, failure, or early exit) — server-side cancellation in ~10 Rust lines.
  * See `parseHandleEnvelope` (`streaming/handle.ts`) for the wire convention.
+ *
+ * OPTIONAL: detection is envelope-driven — any command that emits
+ * `handle:<rid>` is auto-closed even without this meta. The meta matters
+ * only to opt OUT (`tauri.resource({ autoClose: false })`) and to document
+ * intent in the contract.
  */
 tauri.resource = (config): MetaPlugin => tauri({ resource: config ?? {} });
 

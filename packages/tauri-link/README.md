@@ -764,6 +764,7 @@ Lifecycle guarantees:
 - The `handle:<rid>` envelope is announced exactly once (by the producer); the link keeps the **first** announcement and swallows malformed or duplicate ones
 - **Auto-close fires on abnormal exits only**: consumer abort (`signal`), stream failure, or early consumer exit (`.return()` / `break`); a **normal completion never auto-closes** — the Rust side owns its lifecycle (the worker removes its own resource via `resources_table().close(rid)`)
 - `tauri.resource({ autoClose: false })` makes the resource fully manual
+- **`tauri.resource()` is optional for detection** — the `handle:<rid>` envelope alone enables auto-close (envelope-driven, see the source-driven tests in `channel-stream.test.ts`); the meta's role is the `autoClose: false` opt-out and contract documentation
 - Auto-close is **best-effort, never silent**: close failures don't mask the stream's own exit cause, but they ARE logged loudly (`Failed to close Rust resource rid=N … Cause: …`) — a failed close leaves the Rust task running
 - `link.resource.close()` **rejects** on failure (ORPCError at the boundary) — a failed "close" is never a silent success
 - Works in both transports (channel and listen); the close invoke uses the `plugin:resources|close` IPC, which requires the **`core:resources:allow-close`** capability — grant it explicitly in `src-tauri/capabilities/*.json` (`"core:default"` alone has been observed _not_ to include it: the invoke fails with `resources.close not allowed`)
