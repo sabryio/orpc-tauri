@@ -45,6 +45,7 @@ cargo tauri build
 - Transfer progress: send data-less `Event::default().progress(read, total)` envelopes via channels (throttled, every N chunks); always end channel streams with a `done` event
 - Resource-backed stream commands (`tauri.resource()` meta): register the task handle in `app.resources_table()` (AppHandle param via `tauri::Manager`), announce it once with `Event::default().handle(rid)`, poll the cancel token in the loop, and drop the own rid (`resources_table().close(rid)`) on normal completion — no `done` after a cancel
 - Resource close is the server-side cancellation hook: implement `Resource::close(self)` to cancel pending work (see `commands/resource.rs`: `DatabaseConn`, `TransferHandle`)
+- `plugin:resources|close` (the JS-side close of a rid) requires the `core:resources:allow-close` capability — granted explicitly in `capabilities/default.json` even though `core:default` is listed
 - Errors use thiserror for derive, serialize to JSON with code and message
 - Async runtime via `tauri::async_runtime::spawn` for background tasks
 
