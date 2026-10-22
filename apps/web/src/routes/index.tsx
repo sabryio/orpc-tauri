@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
 	Activity,
 	BarChart3,
+	BellRing,
 	Boxes,
 	Database,
 	MessagesSquare,
@@ -20,6 +21,7 @@ import { ChatTab } from "./-components/chat-tab";
 import { DataLayerTab } from "./-components/data-layer-tab";
 import { FileUploadTab } from "./-components/file-upload-tab";
 import { OverviewTab } from "./-components/overview-tab";
+import { PluginTab } from "./-components/plugin-tab";
 import { ResourceTab } from "./-components/resource-tab";
 import { StreamingTab } from "./-components/streaming-tab";
 
@@ -128,6 +130,19 @@ function HomeComponent() {
 
 						<button
 							type="button"
+							onClick={() => setActiveTab("plugins")}
+							className={`flex w-full items-center gap-3 rounded px-3 py-2 text-sm transition-all ${
+								activeTab === "plugins"
+									? "glow border border-primary/50 bg-primary/20 text-primary"
+									: "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+							}`}
+						>
+							<BellRing className="h-4 w-4" />
+							Plugins
+						</button>
+
+						<button
+							type="button"
 							onClick={() => setActiveTab("resources")}
 							className={`flex w-full items-center gap-3 rounded px-3 py-2 text-sm transition-all ${
 								activeTab === "resources"
@@ -166,6 +181,7 @@ function HomeComponent() {
 								{activeTab === "advanced" && "Advanced Patterns"}
 								{activeTab === "files" && "File Upload"}
 								{activeTab === "chat" && "Duplex Chat"}
+								{activeTab === "plugins" && "Plugin Commands"}
 								{activeTab === "resources" && "Rust Resources"}
 							</h2>
 							<p className="text-muted-foreground text-xs">
@@ -193,6 +209,7 @@ function HomeComponent() {
 						{activeTab === "advanced" && <AdvancedTab />}
 						{activeTab === "files" && <FileUploadTab />}
 						{activeTab === "chat" && <ChatTab />}
+						{activeTab === "plugins" && <PluginTab />}
 						{activeTab === "resources" && <ResourceTab />}
 					</main>
 				</div>

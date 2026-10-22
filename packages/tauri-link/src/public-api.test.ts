@@ -1,7 +1,8 @@
-import { Effect } from "effect";
+import { Effect, Exit } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { EffectTauriLink } from "./link";
 import { TauriLink } from "./public-api";
+import { validateContract } from "./resolvers/contract-validator";
 import { createMockInvoker } from "./testing/mock-services";
 
 // The duplex tests run TauriLink's live streaming path end-to-end, which
@@ -134,6 +135,60 @@ describe("TauriLink public API", () => {
 			await expect(
 				link.call(["test", "procedure"], { id: 1 }),
 			).resolves.toEqual({ done: true });
+		});
+	});
+
+	describe("plugin-as-procedure (explicit command override)", () => {
+		it("invokes plugin commands verbatim (plugin:notification|notify)", async () => {
+			const contract = {
+				desktop: {
+					desktop_notify: {
+						"~orpc": {
+							meta: {
+								"~tauri": { command: "plugin:notification|notify" },
+							},
+						},
+					},
+				},
+			};
+
+			const calls: { command: string; args?: Record<string, unknown> }[] = [];
+			const link = new TauriLink(contract as never as Record<string, unknown>, {
+				invoke: async <T>(command: string, args?: Record<string, unknown>) => {
+					calls.push({ command, args });
+					return undefined as T;
+				},
+			});
+
+			await link.call(["desktop", "desktop_notify"], {
+				options: { title: "Sync done", body: "cold archive ready" },
+			});
+
+			expect(calls).toEqual([
+				{
+					command: "plugin:notification|notify",
+					args: { options: { title: "Sync done", body: "cold archive ready" } },
+				},
+			]);
+		});
+
+		it("plugin namespaces never collide with app-derived command names", async () => {
+			const contract = {
+				planet: { delete_planet: { "~orpc": { meta: {} } } },
+				desktop: {
+					// The plugin namespace (plugin:notification|...) cannot look like
+					// a derived app command, even though the route key is delete_planet.
+					delete_planet: {
+						"~orpc": {
+							meta: { "~tauri": { command: "plugin:notification|notify" } },
+						},
+					},
+				},
+			};
+
+			const exit = await Effect.runPromiseExit(validateContract(contract));
+
+			expect(Exit.isSuccess(exit)).toBe(true);
 		});
 	});
 

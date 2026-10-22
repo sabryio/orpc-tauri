@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "core:resources:allow-close",
+    "notification:default",
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-maximize",

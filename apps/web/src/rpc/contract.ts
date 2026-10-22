@@ -300,6 +300,40 @@ export const contract = {
 			.output(asyncIteratorObject(z.instanceof(ArrayBuffer)))
 			.errors(StandardApiErrors),
 	},
+
+	// ============================================================================
+	// Plugin-as-procedure — zero-cost access to the Tauri plugin ecosystem
+	// ============================================================================
+	//
+	// The meta override routes straight at the plugin's IPC namespace, so
+	// existing plugin commands become typed contract procedures with NO
+	// custom Rust command in between. The input courier is now the PLUGIN's
+	// own parameter name (`options` for notification — the link passes args
+	// verbatim), NOT our usual `input` wrapper. The capability JSON stays
+	// the source of truth for grants (`notification:default` in
+	// src-tauri/capabilities/default.json).
+
+	desktop: {
+		desktop_notify: oc
+			.meta(tauri.command("plugin:notification|notify"))
+			.input(
+				z.object({
+					options: z.object({
+						title: z.string().min(1),
+						body: z.string().optional(),
+					}),
+				}),
+			)
+			.output(z.void())
+			.errors(StandardApiErrors),
+		desktop_is_permission_granted: oc
+			.meta(tauri.command("plugin:notification|is_permission_granted"))
+			.input(z.void())
+			// The plugin's native shape: `Some(true)`/`Some(false)`/`None`
+			// (prompt states) — desktop always reports Some(true).
+			.output(z.boolean().nullable())
+			.errors(StandardApiErrors),
+	},
 } as const;
 
 export type Contract = typeof contract;

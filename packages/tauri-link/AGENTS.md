@@ -71,7 +71,7 @@ bun run test --watch
 ## Conventions
 
 - Link reads contract metadata to determine streaming mode, transport type, and (optionally) an explicit command override
-- Command names are derived from the last route-path segment verbatim (no case conversion) when no explicit `tauri.command(...)` meta exists
+- Command names are derived from the last route-path segment verbatim (no case conversion) when no explicit `tauri.command(...)` meta exists; explicit meta is also the plugin-as-procedure hook: `plugin:notification|notify` etc. are invoked verbatim — no case conversion, no custom Rust command (permission errors surface with their ACL message, same loud path as `plugin:resources|close`)
 - Channel transport ids accept snake_case or camelCase and normalize to camelCase (Tauri IPC keys args in camelCase)
 - Streaming calls support transfer progress on BOTH transports (channel and listen/SSE): data-less `progress:<read>/<total>` comment envelopes fire the `onProgress` call option, never yielded as payload; the convention is configured per procedure via `tauri.channel(id, progress)` or `tauri.listen(progress)` (`prefix`/`parser`), and without `onProgress` the envelopes are swallowed with zero parsing
 - Request context (IPC analog of HTTP headers): `TauriLink<TContext>` — link-level `TauriLinkOptions.context` (static object or factory re-evaluated per call) merges shallowly with per-call `CallOptions.context` (per-call wins); the resolved value is injected into invoke args under the reserved `context` key — the single delivery path, no separate invoke parameter; when no context exists at all, args stay untouched; Rust commands opt in by declaring `context: Option<CallCtx>` — the contract's Zod schemas are unaffected

@@ -39,6 +39,7 @@ cargo tauri build
 
 - Commands use `#[tauri::command]` macro, registered in `invoke_handler![]`
 - Command names are snake_case and must match the oRPC contract route keys exactly (the link derives commands from route keys — no case conversion)
+- Plugin-as-procedure: app contracts can route at existing plugin IPC verbatim via `tauri.command("plugin:notification|notify")` — no custom Rust command; invoke receives the namespace string as-is and plugin arg names (`options: NotificationData`, camelCase serde) replace the `input` courier; capability grants belong in `capabilities/default.json` (e.g. `notification:default`)
 - Return type is `Result<T, AppError>` where T serializes to JSON
 - State managed via `tauri::State<T>` for shared data (PlanetStore)
 - SSE streaming: emit events via `app.emit()`, listen on frontend via event names
