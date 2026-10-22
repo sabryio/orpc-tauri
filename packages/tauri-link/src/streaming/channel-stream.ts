@@ -60,7 +60,7 @@ export const createChannelStream = <T>(
 			// (first envelope wins) for the Scope teardown finalizer below.
 			const ridSlot: ResourceRidSlot = {};
 
-			const channel = yield* factory.createChannel<SseEvent<T>>();
+			const channel = yield* factory.createChannel<SseEvent<T> | ArrayBuffer>();
 
 			// Scope teardown (completion, failure, or mid-stream cancellation):
 			// stop the pipeline first so late envelopes can't reach the consumer
@@ -125,6 +125,16 @@ export const createChannelStream = <T>(
 
 			// Set up channel message handler
 			channel.onmessage = (msg) => {
+				// Raw binary payloads (Channel<InvokeResponseBody> raw sends —
+				// the `tauri.binary()` convention): the decoded message arrives
+				// as an ArrayBuffer — yield it as-is with NO JSON envelope
+				// decode. Control envelopes keep coming as JSON objects and
+				// flow through the branches below.
+				if (msg instanceof ArrayBuffer) {
+					emit.value(msg as T);
+					return;
+				}
+
 				if (msg.event === "message" && msg.data !== undefined) {
 					emit.value(msg.data);
 				} else if (msg.event === "error") {

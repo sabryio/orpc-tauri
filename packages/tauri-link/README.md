@@ -778,6 +778,42 @@ pub async fn ping(context: Option<CallCtx>) -> Result<PingResponse, AppError> {
 
 More guardrails: custom `invoke` implementations see the resolved context as part of `args` — there is no separate parameter (the reserved key is the single delivery path). When neither side provides a context, args are left completely untouched (`ping` still sends no args object).
 
+### Raw Binary Chunks (Zero JSON)
+
+Channel commands can stream **raw bytes** with no JSON inflation: declare the Rust parameter as `Channel<InvokeResponseBody>` (the Tauri default type — see `@tauri-apps/api` docs) and send `InvokeResponseBody::Raw(chunk)`; the link's channel transport yields the decoded message **as an `ArrayBuffer`** — data chunks never pass through JSON, while control envelopes (`flush`, `progress:`, `done`) keep coming as JSON objects and parse as usual. No metadata is needed; a plain `tauri.channel(...)` transport is enough:
+
+```rust
+#[tauri::command]
+pub async fn raw_file_download(
+    input: RawDownloadInput,
+    on_event: Channel<InvokeResponseBody>, // raw channel
+) -> Result<usize, AppError> {
+    let mut file = std::fs::File::open(&input.path)?;
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        match file.read(&mut buf)? {
+            0 => break,
+            n => on_event.send(InvokeResponseBody::Raw(buf[..n].to_vec()))?, // ⇒ ArrayBuffer
+        }
+    }
+    Ok(total)
+}
+```
+
+```typescript
+// contract.ts — output schema is the raw buffer itself
+const raw_download = oc
+  .meta(tauri.channel("on_event"))
+  .input(z.object({ input: z.object({ path: z.string().min(1) }) }))
+  .output(asyncIteratorObject(z.instanceof(ArrayBuffer)));
+
+for await (const bytes of client.raw.raw_download({ input: { path } })) {
+  player.appendBuffer(bytes); // bytes: ArrayBuffer
+}
+```
+
+> Tauri caveat: raw payloads under `MAX_RAW_DIRECT_EXECUTE_THRESHOLD` (1 KiB) are executed inline over `eval` and larger ones are fetched via IPC — both arrive as `ArrayBuffer`. A `Channel<Vec<u8>>` would NOT be raw (`Vec<u8>` serializes as a JSON number array) — the channel parameter must be `Channel<InvokeResponseBody>`.
+
 ### Resource-Backed Streams (`tauri.resource`)
 
 Long-running stream commands can register a handle in **Tauri's resource table** and announce it as a data-less control envelope — `comment: "handle:<rid>"` (Rust builder: `Event::default().handle(rid)`). The link swallows it and, with the default `autoClose`, **closes the resource when the stream exits abnormally** — consumer abort, failure, or early exit. Closing runs Rust's `Resource::close`, which is your one-line server-side cancellation hook.

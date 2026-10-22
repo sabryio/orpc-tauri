@@ -607,4 +607,118 @@ describe("createChannelStream", () => {
 			expect(closes).toEqual([]);
 		});
 	});
+
+	describe("raw binary payloads (Channel<InvokeResponseBody>)", () => {
+		it("yields ArrayBuffers as-is while JSON control envelopes keep parsing", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+			} as unknown as Channel<unknown>;
+
+			const chunk1 = new Uint8Array([7, 8, 9, 10]).buffer as ArrayBuffer;
+			const chunk2 = new Uint8Array([11, 12]).buffer as ArrayBuffer;
+
+			const closes: number[] = [];
+			const mockFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: () => Effect.succeed(mockChannel),
+				}),
+			);
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>(command: string, args?: Record<string, unknown>) => {
+						if (command === "plugin:resources|close") {
+							closes.push(args?.rid as number);
+							return Effect.succeed(null as T);
+						}
+						if (mockChannel.onmessage) {
+							// Raw chunk — arrives as the decoded ArrayBuffer.
+							mockChannel.onmessage(chunk1);
+							// Control envelopes stay JSON objects.
+							mockChannel.onmessage({ comment: "progress:64/128" });
+							mockChannel.onmessage({ comment: "handle:9" });
+							mockChannel.onmessage(chunk2);
+							mockChannel.onmessage({ event: "done" });
+						}
+						return Effect.succeed(null as T);
+					},
+				}),
+			);
+
+			const progress: ProgressInfo[] = [];
+
+			const stream = createChannelStream<ArrayBuffer>(
+				"raw_command",
+				{},
+				"onEvent",
+				(info) => progress.push(info),
+				undefined,
+				{ autoClose: true },
+			);
+
+			const results = await Effect.runPromise(
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
+					Effect.scoped,
+				),
+			);
+
+			// Payloads yield the exact ArrayBuffer instances — no JSON round-trip.
+			expect(Array.from(results)).toEqual([chunk1, chunk2]);
+			// Control envelopes (progress, handle announcement) still parse.
+			expect(progress).toEqual([
+				{ bytesTransferred: 64, totalBytes: 128, percentage: 50 },
+			]);
+			expect(closes).toEqual([]);
+		});
+
+		it("an ArrayBuffer never masquerades as an SSE envelope", async () => {
+			const mockChannel = {
+				onmessage: null as ((msg: unknown) => void) | null,
+			} as unknown as Channel<unknown>;
+
+			const mockFactory = Layer.succeed(
+				TauriChannelFactory,
+				TauriChannelFactory.of({
+					createChannel: () => Effect.succeed(mockChannel),
+				}),
+			);
+
+			const mockInvoker = Layer.succeed(
+				TauriInvoker,
+				TauriInvoker.of({
+					invoke: <T>() =>
+						Effect.sync(() => {
+							// Raw bytes even spelling "done" are still bytes — they
+							// must yield, never terminate the stream.
+							mockChannel.onmessage(
+								new Uint8Array([100, 111, 110, 101]).buffer as ArrayBuffer,
+							);
+							mockChannel.onmessage(new ArrayBuffer(0));
+							mockChannel.onmessage({ event: "done" });
+							return null as T;
+						}),
+				}),
+			);
+
+			const stream = createChannelStream<ArrayBuffer>(
+				"raw_command",
+				{},
+				"onEvent",
+			);
+
+			const results = await Effect.runPromise(
+				stream.pipe(
+					Stream.runCollect,
+					Effect.provide(Layer.mergeAll(mockFactory, mockInvoker)),
+					Effect.scoped,
+				),
+			);
+
+			expect(Array.from(results).length).toBe(2);
+		});
+	});
 });

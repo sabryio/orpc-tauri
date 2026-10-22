@@ -48,6 +48,13 @@ export function FileUploadTab() {
 	);
 	const downloadAbortRef = useRef<AbortController | null>(null);
 
+	// ---- raw binary download (tauri.binary() convention, §1) ---------------
+	const [rawPath, setRawPath] = useState("Cargo.toml");
+	const [rawDownload, setRawDownload] = useState<DownloadState>(
+		INITIAL_DOWNLOAD_STATE,
+	);
+	const rawDownloadAbortRef = useRef<AbortController | null>(null);
+
 	const uploadFileMutation = useMutation(
 		orpc.file.upload_file.mutationOptions({
 			onSuccess: (data) => {
@@ -175,6 +182,82 @@ export function FileUploadTab() {
 
 	const handleCancelDownload = () => {
 		downloadAbortRef.current?.abort();
+	};
+
+	const handleRawDownload = async () => {
+		const controller = new AbortController();
+		rawDownloadAbortRef.current = controller;
+
+		setRawDownload({
+			status: "downloading",
+			percent: 0,
+			received: 0,
+			totalBytes: null, // announced by Rust once the file is opened
+		});
+
+		try {
+			let received = 0;
+
+			const iterator = await client.raw.raw_download(
+				{ input: { path: rawPath } },
+				{
+					// Progress envelopes ride the same channel, still JSON —
+					// their `totalBytes` is the file size announced by Rust.
+					onProgress: (info) => {
+						setRawDownload((prev) => ({
+							...prev,
+							percent: Math.max(prev.percent, info.percentage ?? 0),
+							received: Math.max(prev.received, info.bytesTransferred),
+							totalBytes: info.totalBytes ?? prev.totalBytes,
+						}));
+					},
+					signal: controller.signal,
+				},
+			);
+
+			for await (const chunk of iterator) {
+				// Each chunk is a raw ArrayBuffer — zero JSON overhead.
+				received += chunk.byteLength;
+				setRawDownload((prev) => ({
+					...prev,
+					received: Math.max(prev.received, received),
+				}));
+			}
+
+			setRawDownload((prev) => ({
+				status: "done",
+				percent: 100,
+				received,
+				totalBytes: prev.totalBytes ?? received,
+			}));
+			toast.success(`Raw-download finished in-byte-true: ${rawPath}`);
+		} catch (error) {
+			if (
+				error instanceof ORPCError &&
+				error.code === "CLIENT_CLOSED_REQUEST"
+			) {
+				setRawDownload(INITIAL_DOWNLOAD_STATE);
+				toast.info("Raw download cancelled");
+			} else if (error instanceof ORPCError) {
+				setRawDownload((prev) => ({ ...prev, status: "error" }));
+				toast.error(
+					isDefinedError(error)
+						? `Raw download failed: [${error.code}] ${error.message}`
+						: `Raw download failed: ${(error as any).message}`,
+				);
+			} else {
+				setRawDownload((prev) => ({ ...prev, status: "error" }));
+				toast.error(
+					`Raw download failed: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		} finally {
+			rawDownloadAbortRef.current = null;
+		}
+	};
+
+	const handleCancelRawDownload = () => {
+		rawDownloadAbortRef.current?.abort();
 	};
 
 	return (
@@ -346,6 +429,82 @@ export function FileUploadTab() {
 						<p className="text-destructive text-xs">✕ Transfer failed</p>
 					)}
 				</div>
+			</Card>
+
+			{/* Raw Binary Download Demo (tauri.binary() convention) */}
+			<Card className="border-primary/30 bg-card p-6">
+				<div className="mb-3 flex items-center justify-between">
+					<h3 className="font-semibold text-primary text-sm">
+						Raw Binary Download — tauri.binary() (zero JSON)
+					</h3>
+					<span className="font-mono text-muted-foreground text-xs">
+						{rawDownload.status === "downloading" ||
+						rawDownload.status === "done"
+							? `${formatBytes(rawDownload.received)}${rawDownload.totalBytes ? ` / ${formatBytes(rawDownload.totalBytes)}` : ""}`
+							: "raw chunks → ArrayBuffer"}
+					</span>
+				</div>
+
+				<div className="mb-3 h-2 overflow-hidden rounded border border-primary/20 bg-background/50">
+					<div
+						className="h-full bg-success transition-all duration-200"
+						style={{ width: `${rawDownload.percent}%` }}
+					/>
+				</div>
+
+				<div className="flex items-center gap-3">
+					<input
+						value={rawPath}
+						onChange={(e) => setRawPath(e.target.value)}
+						placeholder="relative to src-tauri/, e.g. target/debug/&lt;app&gt;.exe"
+						spellCheck={false}
+						className="h-9 min-w-0 flex-1 rounded border border-primary/30 bg-background/60 px-3 font-mono text-xs outline-none focus:border-primary/60"
+					/>
+					<Button
+						onClick={handleRawDownload}
+						disabled={
+							rawDownload.status === "downloading" || rawPath.trim() === ""
+						}
+						className="glow-hover shrink-0"
+					>
+						{rawDownload.status === "downloading" ? (
+							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+						) : (
+							<Download className="mr-2 h-4 w-4" />
+						)}
+						{rawDownload.status === "downloading"
+							? "Downloading..."
+							: "Download"}
+					</Button>
+					{rawDownload.status === "downloading" && (
+						<Button
+							onClick={handleCancelRawDownload}
+							variant="outline"
+							className="border-destructive/50"
+						>
+							<X className="mr-2 h-4 w-4" />
+							Cancel
+						</Button>
+					)}
+				</div>
+				<p className="mt-3 text-muted-foreground text-xs">
+					Sends the real file through a raw channel: data chunks arrive as
+					<code className="mx-1 font-mono text-primary">ArrayBuffer</code>
+					(InvokeResponseBody::Raw — no <code>number[]</code> JSON inflation)
+					while
+					<code className="mx-1 font-mono text-primary">progress:</code>
+					envelopes stay JSON. Try
+					<code className="mx-1 font-mono">Cargo.toml</code>
+					for a small file, or the debug exe for megabytes.
+					{rawDownload.status === "done" && (
+						<span className="text-success">
+							{"  "}✓ {formatBytes(rawDownload.received)} in-byte-true
+						</span>
+					)}
+					{rawDownload.status === "error" && (
+						<span className="text-destructive"> ✕ failed (see toast)</span>
+					)}
+				</p>
 			</Card>
 		</div>
 	);

@@ -241,6 +241,22 @@ export const contract = {
 			)
 			.output(asyncIteratorObject(FileChunkSchema)),
 	},
+
+	// ============================================================================
+	// Raw Binary - `tauri.binary()` convention (ADVANCED_FEATURES.md item 1)
+	// ============================================================================
+
+	// Chunks arrive from the link as real ArrayBuffers — raw IPC bodies
+	// (`Channel<InvokeResponseBody>`), NOT JSON byte arrays: the channel
+	// transport yields the decoded raw message untouched and keeps parsing
+	// JSON control envelopes (flush / progress / done).
+	raw: {
+		raw_download: oc
+			.meta(tauri.channel("on_event"))
+			.input(z.object({ input: z.object({ path: z.string().min(1) }) }))
+			.output(asyncIteratorObject(z.instanceof(ArrayBuffer)))
+			.errors(StandardApiErrors),
+	},
 } as const;
 
 export type Contract = typeof contract;
