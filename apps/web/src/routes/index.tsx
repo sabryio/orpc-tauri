@@ -6,6 +6,7 @@ import {
 	BarChart3,
 	Boxes,
 	Database,
+	MessagesSquare,
 	Radio,
 	Terminal,
 	Upload,
@@ -15,6 +16,7 @@ import { useState } from "react";
 import { TitleBar } from "@/components/title-bar";
 import { orpc } from "@/rpc";
 import { AdvancedTab } from "./-components/advanced-tab";
+import { ChatTab } from "./-components/chat-tab";
 import { DataLayerTab } from "./-components/data-layer-tab";
 import { FileUploadTab } from "./-components/file-upload-tab";
 import { OverviewTab } from "./-components/overview-tab";
@@ -113,6 +115,19 @@ function HomeComponent() {
 
 						<button
 							type="button"
+							onClick={() => setActiveTab("chat")}
+							className={`flex w-full items-center gap-3 rounded px-3 py-2 text-sm transition-all ${
+								activeTab === "chat"
+									? "glow border border-primary/50 bg-primary/20 text-primary"
+									: "text-muted-foreground hover:bg-primary/10 hover:text-foreground"
+							}`}
+						>
+							<MessagesSquare className="h-4 w-4" />
+							Duplex Chat
+						</button>
+
+						<button
+							type="button"
 							onClick={() => setActiveTab("resources")}
 							className={`flex w-full items-center gap-3 rounded px-3 py-2 text-sm transition-all ${
 								activeTab === "resources"
@@ -150,6 +165,7 @@ function HomeComponent() {
 								{activeTab === "streaming" && "Stream Transport Tests"}
 								{activeTab === "advanced" && "Advanced Patterns"}
 								{activeTab === "files" && "File Upload"}
+								{activeTab === "chat" && "Duplex Chat"}
 								{activeTab === "resources" && "Rust Resources"}
 							</h2>
 							<p className="text-muted-foreground text-xs">
@@ -176,6 +192,7 @@ function HomeComponent() {
 						{activeTab === "streaming" && <StreamingTab />}
 						{activeTab === "advanced" && <AdvancedTab />}
 						{activeTab === "files" && <FileUploadTab />}
+						{activeTab === "chat" && <ChatTab />}
 						{activeTab === "resources" && <ResourceTab />}
 					</main>
 				</div>

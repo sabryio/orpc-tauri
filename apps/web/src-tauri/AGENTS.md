@@ -15,6 +15,7 @@ Rust backend for the Tauri desktop app. Implements oRPC contract commands, dual 
 | src/commands/channel_stream.rs   | Channel streaming via Tauri IPC channels                  |
 | src/commands/file.rs             | File upload (unary) and download demo (channel + progress) |
 | src/commands/resource.rs         | Resource protocol demo: db_open/db_query/db_close + cancellable resource_file_download |
+| src/commands/chat.rs             | Duplex chat session demo: rid-bearing ChatSession + chat_session_send (tokio mpsc) |
 | src/broadcast.rs                 | SSE Event builder (event/id/retry/comment/data/progress) for streaming  |
 | src/types/models.rs              | Domain models (PingResponse, Planet)                      |
 | src/types/errors.rs              | AppError with serialization for IPC                       |

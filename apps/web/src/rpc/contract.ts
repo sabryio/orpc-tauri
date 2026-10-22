@@ -91,6 +91,19 @@ const FileChunkSchema = z
 	.transform((bytes) => new Uint8Array(bytes));
 
 // ============================================================================
+// Domain Types - Duplex Chat (link.duplex: rid + channel + unary)
+// ============================================================================
+
+const ChatMessageSchema = z.object({
+	id: z.number().int(),
+	/** `you` = JS sender echo, `rust` = the bot worker. */
+	from: z.string(),
+	text: z.string(),
+});
+
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+// ============================================================================
 // Error Schemas
 // ============================================================================
 
@@ -240,6 +253,36 @@ export const contract = {
 				}),
 			)
 			.output(asyncIteratorObject(FileChunkSchema)),
+	},
+
+	// ============================================================================
+	// Duplex Chat - link.duplex (rid + channel + unary = WebSockets)
+	// ============================================================================
+	//
+	// The session is a Rust resource (`tokio::mpsc` inside); the rid is
+	// announced as `handle:<rid>` and injected into the paired send command
+	// by the link — the send payload excludes `handle` (link-owned field).
+
+	chat: {
+		chat_session: oc
+			.meta(
+				tauri.channel("on_event"), // Rust command param, verbatim — normalized over IPC
+				tauri.resource(), // the session rid announced as handle:<rid>; autoClose on break/abort
+			)
+			.input(z.object({ input: z.object({ room: z.string().min(1) }) }))
+			.output(asyncIteratorObject(ChatMessageSchema))
+			.errors(StandardApiErrors),
+		chat_session_send: oc
+			.input(
+				z.object({
+					input: z.object({
+						handle: ResourceHandleSchema, // injected by link.duplex from the captured rid
+						text: z.string().max(2000),
+					}),
+				}),
+			)
+			.output(z.void())
+			.errors(StandardApiErrors),
 	},
 
 	// ============================================================================

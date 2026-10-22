@@ -39,6 +39,8 @@ pub fn run() {
             commands::resource::db_close,
             commands::resource::resource_file_download,
             commands::raw_file::raw_download,
+            commands::chat::chat_session,
+            commands::chat::chat_session_send,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
