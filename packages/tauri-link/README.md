@@ -784,7 +784,7 @@ Channel commands can stream **raw bytes** with no JSON inflation: declare the Ru
 
 ```rust
 #[tauri::command]
-pub async fn raw_file_download(
+pub async fn raw_download(
     input: RawDownloadInput,
     on_event: Channel<InvokeResponseBody>, // raw channel
 ) -> Result<usize, AppError> {
