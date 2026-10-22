@@ -105,6 +105,17 @@ impl Event {
         self.comment(format!("handle:{rid}"))
     }
 
+    /// Meta-only stream-priming envelope (`:flush`)
+    ///
+    /// A channel's first send must land before any real frames can flow,
+    /// so every channel stream starts with this Axum-style flush comment
+    /// to establish the connection. It carries no data field, so it never
+    /// reaches the consumer's Zod payload schema — the link swallows it
+    /// as a control signal.
+    pub fn flush(self) -> Self {
+        self.comment("flush")
+    }
+
     /// Set the event's data field (`data: <content>`)
     ///
     /// This corresponds to MessageEvent's data field.
@@ -213,7 +224,7 @@ impl<T: Serialize + Clone> SseBroadcaster<T> {
     /// Emit a flush event to establish connection (Axum-style keep-alive)
     pub fn emit_flush(&self) -> Result<(), String> {
         log::debug!("Broadcasting flush event");
-        let flush_event = Event::default().comment("flush");
+        let flush_event = Event::default().flush();
         self.emit_data(flush_event)
     }
 

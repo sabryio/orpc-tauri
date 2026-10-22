@@ -10,7 +10,7 @@ pub async fn stream_events_channel(on_event: Channel<Event>) {
     tauri::async_runtime::spawn(async move {
         // 1. FLUSH: Send initial event to establish connection (Axum-style)
         log::info!("Sending flush event to channel");
-        let flush_event = Event::default().comment("flush");
+        let flush_event = Event::default().flush();
         if let Err(e) = on_event.send(flush_event) {
             log::error!("Failed to send flush event: {:?}", e);
             return;

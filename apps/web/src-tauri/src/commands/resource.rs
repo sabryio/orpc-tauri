@@ -200,7 +200,7 @@ pub async fn resource_file_download(
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         // 2. FLUSH: establish connection (Axum style)
-        if let Err(e) = on_event.send(Event::default().comment("flush")) {
+        if let Err(e) = on_event.send(Event::default().flush()) {
             log::error!("Failed to send flush event: {:?}", e);
             return;
         }

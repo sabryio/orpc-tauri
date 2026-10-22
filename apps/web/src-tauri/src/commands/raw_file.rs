@@ -70,7 +70,7 @@ pub async fn raw_download(
         //    `Event` shapes are identical to what `download_file` sends).
         on_event
             .send(InvokeResponseBody::Json(
-                serde_json::to_string(&Event::default().comment("flush"))?,
+                serde_json::to_string(&Event::default().flush())?,
             ))
             .map_err(|e| AppError::internal(format!("flush send failed: {e:?}")))?;
 
