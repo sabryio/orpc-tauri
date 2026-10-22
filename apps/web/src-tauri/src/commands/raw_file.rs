@@ -37,7 +37,7 @@ const RAW_CHUNK_SIZE: usize = 64 * 1024;
 /// incoming `ArrayBuffer` as data, keep parsing objects for control
 /// envelopes (`flush`, `progress:`, `done`).
 #[tauri::command]
-pub async fn raw_file_download(
+pub async fn raw_download(
     input: RawDownloadInput,
     on_event: Channel<InvokeResponseBody>,
 ) -> Result<usize, AppError> {
