@@ -45,6 +45,7 @@ export const createEventStream = <T>(
 	onProgress?: (info: ProgressInfo) => void,
 	progressParser?: (comment: string) => ProgressInfo | undefined,
 	resource?: { readonly autoClose?: boolean },
+	onHandle?: (rid: number) => void,
 ): Stream.Stream<T, StreamError, TauriInvoker | TauriListener> =>
 	createQueueStream<T, TauriInvoker | TauriListener>((emit) =>
 		Effect.gen(function* () {
@@ -62,6 +63,9 @@ export const createEventStream = <T>(
 				// Control envelope: first `handle:<rid>` announcement wins; a
 				// comment-only envelope (no payload) is swallowed here.
 				if (captureHandleAnnouncement(sseEvent.comment ?? "", ridSlot)) {
+					// Duplex sessions observe the rid the moment the Rust side
+					// announces it (duplicate announcements ignored by caller).
+					if (ridSlot.rid !== undefined) onHandle?.(ridSlot.rid);
 					if (sseEvent.data === undefined) return;
 				}
 

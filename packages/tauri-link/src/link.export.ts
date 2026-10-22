@@ -61,6 +61,8 @@ export { EVENT_META_SYMBOL } from "./streaming/sse-types";
 export type {
   CallOptions,
   Contract,
+  DuplexOptions,
+  DuplexSession,
   StreamEvent,
   TauriErrorPayload,
   TauriLinkOptions,

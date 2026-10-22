@@ -883,6 +883,73 @@ Lifecycle guarantees:
 
 ---
 
+### Duplex Sessions (`link.duplex` — rid + channel + unary = WebSockets)
+
+`Channel` is Rust→JS only; a full-duplex conversation (chat, PTY, live video
+chat) pairs it with the reverse direction that already exists — a unary send
+command. `link.duplex` wires the pair into one session object and hides the
+rid entirely:
+
+```typescript
+const chat = await link.duplex(
+	["chat", "chat_session"], // streaming procedure — the session
+	{ send: ["chat", "chat_session_send"] }, // paired unary command
+	{ signal, startInput: { room } },
+);
+
+for await (const msg of chat) renderMessage(msg); // Rust → JS
+await chat.send({ text: "hi" }); // JS → Rust — rid injected automatically
+```
+
+```rust
+// The session is a Rust resource holding full-duplex state
+pub struct ChatSession {
+	rid: ResourceId,
+	sender: tokio::sync::mpsc::Sender<String>, // JS → worker task
+}
+impl Resource for ChatSession { /* close() = drain + leave room */ }
+
+#[tauri::command] // streaming: flush() first, announce the rid, pump messages
+pub async fn chat_session(input: ChatSessionInput, on_event: Channel<Event>) -> ...
+
+#[tauri::command] // unary: push into the session's mpsc
+pub async fn chat_session_send(input: ChatSendInput) -> Result<(), AppError>
+// ChatSendInput { handle: ResourceId, text: String }
+```
+
+Contract pieces (send payload excludes `handle`; the injected rid always
+wins over whatever the payload claims):
+
+```typescript
+chat_session: oc
+	.meta(tauri.channel("on_event"))
+	.input(z.object({ input: z.object({ room: z.string() }) }))
+	.output(asyncIteratorObject(ChatMessageSchema));
+
+chat_session_send: oc
+	.input(z.object({
+		input: z.object({ handle: ResourceHandleSchema, text: z.string().max(2000) }),
+	}))
+	.output(z.void());
+```
+
+Behavior:
+
+- The rid is captured from the Rust side's `handle:<rid>` announcement
+  (envelope-driven, same mechanism as resource-backed streams) — code before
+  the announcement is queued and fires once it lands
+- Teardown is the stream's own: `break` (early `.return()`) or an aborted
+  `signal` exits the iterator abnormally and closes the rid through the
+  default `autoClose` path — **no separate close command needed**
+- A queued `send` never hangs: every terminal state (normal end, failure,
+  abort) settles it with a typed rejection instead
+- `.send()` failures surface as ORPCError from the paired command (unary
+  error mapping, including context injection, timeout, debug)
+- `handleField` (default `"handle"`) names the paired command's input field
+  that receives `{ rid }`
+
+---
+
 ## Metadata API
 
 Configure RPC behavior through declarative metadata attached to your contract procedures.

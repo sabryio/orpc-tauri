@@ -51,6 +51,7 @@ export const createChannelStream = <T>(
 	onProgress?: (info: ProgressInfo) => void,
 	progressParser?: (comment: string) => ProgressInfo | undefined,
 	resource?: { readonly autoClose?: boolean },
+	onHandle?: (rid: number) => void,
 ): Stream.Stream<T, StreamError, TauriInvoker | TauriChannelFactory> =>
 	createQueueStream<T, TauriInvoker | TauriChannelFactory>((emit) =>
 		Effect.gen(function* () {
@@ -144,7 +145,12 @@ export const createChannelStream = <T>(
 				} else if (msg.comment) {
 					// Control envelopes: `handle:<rid>` first (never yielded),
 					// then progress. Unknown comments stay swallowed.
-					if (captureHandleAnnouncement(msg.comment, ridSlot)) return;
+					if (captureHandleAnnouncement(msg.comment, ridSlot)) {
+						// Duplex sessions observe the rid the moment the Rust side
+						// announces it (duplicate announcements ignored by caller).
+						if (ridSlot.rid !== undefined) onHandle?.(ridSlot.rid);
+						return;
+					}
 					if (onProgress !== undefined) {
 						const info = progressParser
 							? progressParser(msg.comment)

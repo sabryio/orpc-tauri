@@ -136,3 +136,55 @@ export interface TauriLinkOptions<TContext = unknown> {
 	 */
 	context?: TContext | (() => TContext);
 }
+
+// ============================================================================
+// Duplex Session Types
+// ============================================================================
+
+/**
+ * A full-duplex session: Rust→JS messages arrive via iteration while
+ * JS→Rust sends ride the paired unary command with the session rid
+ * auto-injected — the WebSockets shape over existing Tauri primitives
+ * (rid resource + channel + unary send).
+ *
+ * Teardown is the stream's own: `break` (early `.return()`) or an aborted
+ * `signal` exits the iterator abnormally, which closes the announced rid
+ * through the default `autoClose` path — there is no separate close call
+ * or command. A graceful Rust-side close ends the channel and completes
+ * the iterator naturally.
+ */
+export interface DuplexSession<TMessage = unknown, TSendPayload = unknown>
+	extends AsyncIterableIterator<TMessage> {
+	/**
+	 * Send JS→Rust into the live session. Queued until the Rust side
+	 * announces its `handle:<rid>` envelope (the very first envelopes a
+	 * session sends), then routed to the paired unary command.
+	 * Rejects when the session is closed, aborted, or failed.
+	 */
+	send: (payload: TSendPayload) => Promise<void>;
+}
+
+/**
+ * Options for `TauriLink.duplex` — the duplex facade over a streaming
+ * (session-starting) procedure paired with a unary (send) procedure.
+ */
+export interface DuplexOptions<TContext = unknown> {
+	/**
+	 * Input for the session-starting (streaming) procedure — the `{ input: … }`
+	 * courier shape used everywhere else (`{ input: { room } }`).
+	 */
+	startInput?: unknown;
+	signal?: AbortSignal;
+	/**
+	 * Progress parity with plain streaming calls: fires for `progress:`
+	 * control envelopes on the session's Rust→JS stream.
+	 */
+	onProgress?: (
+		info: import("./streaming/progress-types").ProgressInfo,
+	) => void;
+	/**
+	 * Request context — resolved and injected exactly like every other
+	 * call (link defaults + per-call, the send command inherits it too).
+	 */
+	context?: TContext;
+}

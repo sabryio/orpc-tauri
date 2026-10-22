@@ -57,6 +57,13 @@ export interface StreamConfig {
 	 * failure, or consumer early exit. Normal completion never auto-closes.
 	 */
 	readonly resource?: { readonly autoClose?: boolean };
+	/**
+	 * Fired the moment the Rust side announces its `handle:<rid>` envelope.
+	 * Internal hook for the duplex facade (`TauriLink.duplex`), which queues
+	 * `send` calls until the session rid lands. May fire more than once
+	 * (duplicate announcements); callers de-duplicate.
+	 */
+	readonly onHandle?: (rid: number) => void;
 }
 
 /**
@@ -129,6 +136,7 @@ export class EffectTauriLink {
 				config.onProgress,
 				config.progressParser,
 				config.resource,
+				config.onHandle,
 			);
 		} else if (config.mode === "channel" && config.channelParam) {
 			baseStream = createChannelStream<TOutput>(
@@ -138,6 +146,7 @@ export class EffectTauriLink {
 				config.onProgress,
 				config.progressParser,
 				config.resource,
+				config.onHandle,
 			);
 		} else {
 			baseStream = Stream.fail(
