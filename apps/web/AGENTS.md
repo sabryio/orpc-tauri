@@ -51,6 +51,6 @@ bun env:generate
 - TauriLink handles both unary calls and streaming via same client interface
 - Rust commands return `Result<T, AppError>`, errors map to oRPC error codes via ErrorHandler
 - Resource handles (`tauri.resource()` procedures) take/produce plain `{ rid: number }` (`ResourceHandleSchema`) — matches `RustResourceHandle` from orpc-tauri (brand is compile-time only); `link` is exported from `@/rpc` for `link.resource.close(handle)` demos
-- Plugin-as-procedure (`tauri.command("plugin:notification|…")`): contract inputs use the PLUGIN's own parameter name (`options` for the notification plugin), NOT the `{ input: … }` courier; grants live in `src-tauri/capabilities/default.json` (`notification:default`) — permission errors surface as ORPCError with the ACL message (demo: `plugin-tab.tsx`)
+- Plugin-as-procedure (`tauri.command("plugin:notification|…")`): contract inputs use the PLUGIN's own parameter name (`options` for the notification plugin, `port` for network), NOT the `{ input: … }` courier; grants live in `src-tauri/capabilities/default.json` (`notification:default`, `network:allow-*`) — permission errors surface as ORPCError with the ACL message; registered plugins: notification, network (demo: `plugin-tab.tsx`)
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

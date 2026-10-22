@@ -104,6 +104,30 @@ const ChatMessageSchema = z.object({
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 // ============================================================================
+// Domain Types - Network (`plugin:network|*`, tauri-plugin-network)
+// ============================================================================
+
+// Mirrors `NetworkInterface` on the crate. Field names are already
+// snake_case on the wire ("v4_addrs", "mac_addr") — the plugin serializes
+// its own struct names, so no casing here either. Only the fields the UI
+// renders are modeled.
+const V4IfAddrSchema = z.object({
+	ip: z.string(),
+	broadcast: z.string().optional(),
+	netmask: z.string().optional(),
+	prefix: z.number().int().optional(),
+});
+
+const NetworkInterfaceSchema = z.object({
+	name: z.string(),
+	v4_addrs: z.array(V4IfAddrSchema),
+	mac_addr: z.string().nullable().optional(),
+	index: z.number().int(),
+});
+
+export type NetworkInterface = z.infer<typeof NetworkInterfaceSchema>;
+
+// ============================================================================
 // Error Schemas
 // ============================================================================
 
@@ -332,6 +356,39 @@ export const contract = {
 			// The plugin's native shape: `Some(true)`/`Some(false)`/`None`
 			// (prompt states) — desktop always reports Some(true).
 			.output(z.boolean().nullable())
+			.errors(StandardApiErrors),
+	},
+
+	// ---------------------------------------------------------------------------
+	// Network — tauri-plugin-network, same zero-cost routing. Errors are
+	// `Result<T, String>` on this plugin: the link parses those rejection
+	// strings into ORPCError messages like every other Tauri rejection.
+	// ---------------------------------------------------------------------------
+
+	network: {
+		get_non_empty_interfaces: oc
+			.meta(tauri.command("plugin:network|get_non_empty_interfaces"))
+			.input(z.void())
+			.output(z.array(NetworkInterfaceSchema))
+			.errors(StandardApiErrors),
+		non_localhost_networks: oc
+			.meta(tauri.command("plugin:network|non_localhost_networks"))
+			.input(z.void())
+			// Ipv4NetworkSerialize on the crate: { addr, prefix } — the
+			// local CIDRs the demo renders as chips.
+			.output(z.array(z.object({ addr: z.string(), prefix: z.number().int() })))
+			.errors(StandardApiErrors),
+		find_available_port: oc
+			.meta(tauri.command("plugin:network|find_available_port"))
+			.input(z.void())
+			.output(z.number().int())
+			.errors(StandardApiErrors),
+		is_port_taken: oc
+			.meta(tauri.command("plugin:network|is_port_taken"))
+			// The plugin's own parameter name (`port`), NOT the `input`
+			// courier — same plugin-as-procedure rule as `options`.
+			.input(z.object({ port: z.number().int().min(0).max(65535) }))
+			.output(z.boolean())
 			.errors(StandardApiErrors),
 	},
 } as const;

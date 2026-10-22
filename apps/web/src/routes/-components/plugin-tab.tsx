@@ -3,7 +3,7 @@ import { Button } from "@orpc-tauri/ui/components/button";
 import { Card } from "@orpc-tauri/ui/components/card";
 import { Input } from "@orpc-tauri/ui/components/input";
 import { Label } from "@orpc-tauri/ui/components/label";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
 	BellRing,
 	CheckCircle2,
@@ -34,6 +34,9 @@ export function PluginTab() {
 	const [title, setTitle] = useState("Sync complete");
 	const [body, setBody] = useState("Cold archive upload finished in 12m 40s");
 	const [log, setLog] = useState<NotifyLogEntry[]>([]);
+	const [port, setPort] = useState("4180");
+	const [portTaken, setPortTaken] = useState<boolean | null>(null);
+	const [freePort, setFreePort] = useState<number | null>(null);
 
 	const checkPermission = useMutation(
 		orpc.desktop.desktop_is_permission_granted.mutationOptions({
@@ -73,6 +76,51 @@ export function PluginTab() {
 			},
 		}),
 	);
+
+	// ---------------------------------------------------------------------------
+	// Network — plugin:network|* (same zero-cost routing; this plugin's
+	// `Result<T, String>` errors still land as ORPCError messages).
+	// ---------------------------------------------------------------------------
+
+	const interfaces = useQuery(
+		orpc.network.get_non_empty_interfaces.queryOptions(),
+	);
+	const localNetworks = useQuery(
+		orpc.network.non_localhost_networks.queryOptions(),
+	);
+
+	const checkPort = useMutation(
+		orpc.network.is_port_taken.mutationOptions({
+			onSuccess: (taken) => {
+				setPortTaken(taken);
+			},
+			onError: (error) => {
+				setPortTaken(null);
+				toast.error(
+					isDefinedError(error) || error instanceof ORPCError
+						? `Port check failed: [${error.code}] ${error.message}`
+						: "Port check failed",
+				);
+			},
+		}),
+	);
+
+	const findFreePort = useMutation(
+		orpc.network.find_available_port.mutationOptions({
+			onSuccess: (found) => {
+				setFreePort(found);
+			},
+			onError: (error) => {
+				toast.error(
+					isDefinedError(error) || error instanceof ORPCError
+						? `Port scan failed: [${error.code}] ${error.message}`
+						: "Port scan failed",
+				);
+			},
+		}),
+	);
+
+	const parsedPort = Number.parseInt(port, 10);
 
 	return (
 		<div className="flex h-full flex-col gap-6">
@@ -197,6 +245,137 @@ export function PluginTab() {
 						</div>
 					</div>
 				)}
+			</Card>
+
+			<Card className="border-primary/30 bg-card p-6">
+				<div className="mb-3 flex items-center justify-between">
+					<h3 className="font-semibold text-primary text-sm">
+						Network — plugin:network|*
+					</h3>
+					<button
+						type="button"
+						className="font-mono text-muted-foreground text-xs hover:text-primary"
+						onClick={() => {
+							interfaces.refetch();
+							localNetworks.refetch();
+						}}
+					>
+						refresh
+					</button>
+				</div>
+
+				<p className="mb-4 text-muted-foreground text-xs">
+					Another plugin, typed procedures only: local network chips come from{" "}
+					<code>plugin:network|non_localhost_networks</code>, the interface
+					table from <code>plugin:network|get_non_empty_interfaces</code>. Port
+					tools pass the plugin&apos;s own <code>port</code> parameter — again
+					no <code>input</code> courier.
+				</p>
+
+				{localNetworks.data && localNetworks.data.length > 0 ? (
+					<div className="mb-4 flex flex-wrap gap-2">
+						{localNetworks.data.map((net) => (
+							<span
+								key={`${net.addr}/${net.prefix}`}
+								className="rounded border border-primary/30 bg-primary/10 px-2 py-1 font-mono text-primary text-xs"
+							>
+								{net.addr}/{net.prefix}
+							</span>
+						))}
+					</div>
+				) : (
+					<p className="mb-4 text-muted-foreground text-xs">
+						{localNetworks.isPending
+							? "Loading local networks…"
+							: "No routed local networks reported"}
+					</p>
+				)}
+
+				<div className="mb-4 overflow-hidden rounded border border-primary/20">
+					{interfaces.isPending ? (
+						<p className="p-3 text-muted-foreground text-xs">
+							Loading interfaces…
+						</p>
+					) : interfaces.data?.length ? (
+						<div className="divide-y divide-primary/10">
+							{interfaces.data.map((iface) => (
+								<div
+									key={`${iface.index}-${iface.name}`}
+									className="flex items-center justify-between px-3 py-2 text-xs"
+								>
+									<div className="flex items-center gap-2">
+										<span className="font-semibold">{iface.name}</span>
+										{iface.mac_addr && (
+											<span className="font-mono text-muted-foreground">
+												{iface.mac_addr}
+											</span>
+										)}
+									</div>
+									<div className="flex gap-2 font-mono text-muted-foreground">
+										{iface.v4_addrs.map((addr) => (
+											<span key={addr.ip}>
+												{addr.ip}
+												{addr.prefix !== undefined ? `/${addr.prefix}` : ""}
+											</span>
+										))}
+									</div>
+								</div>
+							))}
+						</div>
+					) : (
+						<p className="p-3 text-muted-foreground text-xs">
+							No interfaces with addresses
+						</p>
+					)}
+				</div>
+
+				<div className="flex items-center gap-2">
+					<Input
+						value={port}
+						onChange={(e) => {
+							setPort(e.target.value);
+							setPortTaken(null);
+						}}
+						placeholder="port"
+						className="h-9 max-w-32"
+						inputMode="numeric"
+					/>
+					<Button
+						variant="outline"
+						className="shrink-0"
+						onClick={() =>
+							Number.isInteger(parsedPort) &&
+							checkPort.mutate({ port: parsedPort })
+						}
+						disabled={
+							checkPort.isPending ||
+							!Number.isInteger(parsedPort) ||
+							parsedPort < 0 ||
+							parsedPort > 65535
+						}
+					>
+						Is port taken?
+					</Button>
+					<span className="font-mono text-xs">
+						{checkPort.isPending ? (
+							"checking…"
+						) : portTaken === true ? (
+							<span className="text-destructive">taken</span>
+						) : portTaken === false ? (
+							<span className="text-success">free</span>
+						) : null}
+					</span>
+					<Button
+						className="glow-hover shrink-0"
+						onClick={() => findFreePort.mutate()}
+						disabled={findFreePort.isPending}
+					>
+						Find free port
+					</Button>
+					{freePort !== null && (
+						<span className="font-mono text-primary text-xs">→ {freePort}</span>
+					)}
+				</div>
 			</Card>
 		</div>
 	);
