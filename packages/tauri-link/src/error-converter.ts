@@ -113,10 +113,28 @@ export function toORPCError(error: unknown): AnyORPCError {
 		return unwrapped;
 	}
 
+	// Tauri rejects commands with the raw serialized payload — often a JSON
+	// string of the Rust error. Parse it so the tauriError branch above could
+	// have handled it (recursive call), else surface the text verbatim.
+	if (typeof unwrapped === "string") {
+		const trimmed = unwrapped.trim();
+		if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+			try {
+				return toORPCError(JSON.parse(trimmed));
+			} catch {
+				// Not JSON — the plain text is the message.
+			}
+		}
+		return new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: unwrapped,
+			cause: unwrapped,
+		});
+	}
+
 	// Generic error fallback
 	if (unwrapped instanceof Error) {
 		return new ORPCError("INTERNAL_SERVER_ERROR", {
-			message: unwrapped.message,
+			message: describeError(unwrapped),
 			cause: unwrapped,
 		});
 	}
@@ -125,4 +143,33 @@ export function toORPCError(error: unknown): AnyORPCError {
 		message: "Unknown error",
 		cause: unwrapped,
 	});
+}
+
+/**
+ * Effect's `Data.TaggedError` classes carry context in structured fields
+ * (`path`, `command`, `streamId`, `cause`), not in `.message` — an
+ * empty-message `Error` instance used to surface through the IPC boundary
+ * as a blank ORPCError. Render whatever diagnostic material exists.
+ */
+function describeError(error: Error): string {
+	if (error.message) return error.message;
+
+	const fields = error as unknown as Record<string, unknown>;
+	const tag =
+		typeof fields._tag === "string" ? fields._tag : error.name || "Error";
+
+	const cause = fields.cause;
+	if (cause !== undefined && cause !== null) {
+		const rendered = typeof cause === "string" ? cause : JSON.stringify(cause);
+		if (rendered) return `${tag}: ${rendered}`;
+	}
+
+	const extras: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(fields)) {
+		if (key === "_tag" || key === "cause" || key.startsWith("_")) continue;
+		if (value !== undefined) extras[key] = value;
+	}
+	const extrasJson = Object.keys(extras).length ? JSON.stringify(extras) : "";
+
+	return extrasJson ? `${tag} ${extrasJson}` : tag;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { toORPCError } from "./error-converter";
 import {
 	AbortError,
 	StreamError,
@@ -114,5 +115,62 @@ describe("Error type narrowing", () => {
 		expect(streamErrors).toHaveLength(1);
 		expect(invokeErrors[0]).toBeInstanceOf(TauriInvokeError);
 		expect(streamErrors[0]).toBeInstanceOf(StreamError);
+	});
+});
+
+describe("toORPCError blank-message recovery", () => {
+	it("renders a TaggedError's structured fields when .message is empty", () => {
+		// TauriInvokeError with a string cause — the cause text IS the message.
+		const invokeError = toORPCError(
+			new TauriInvokeError({
+				command: "raw_file_download",
+				input: { path: "Cargo.toml" },
+				cause: "unknown command",
+			}),
+		);
+
+		expect(invokeError.code).toBe("INTERNAL_SERVER_ERROR");
+		expect(invokeError.message).toBe("unknown command");
+
+		// No usable cause — the tag + rendered fields still diagnose.
+		const noCauseError = toORPCError(
+			new TauriInvokeError({
+				command: "raw_file_download",
+				input: null,
+				cause: undefined,
+			}),
+		);
+
+		expect(noCauseError.message).toContain("TauriInvokeError");
+		expect(noCauseError.message).toContain("raw_file_download");
+	});
+
+	it("renders ProcedureNotFoundError's path", () => {
+		const error = toORPCError(
+			new (class extends Error {
+				_tag = "ProcedureNotFoundError";
+				path = ["raw", "raw_download"];
+			})(),
+		);
+
+		expect(error.code).toBe("INTERNAL_SERVER_ERROR");
+		expect(error.message).toContain("ProcedureNotFoundError");
+		expect(error.message).toContain('"raw"');
+	});
+
+	it("parses Tauri's serialized rejection strings back into structured errors", () => {
+		const error = toORPCError(
+			'{"defined":true,"code":"NOT_FOUND","message":"file not found: Cargo.toml"}',
+		);
+
+		expect(error.code).toBe("NOT_FOUND");
+		expect(error.message).toBe("file not found: Cargo.toml");
+	});
+
+	it("surfaces plain-text Tauri rejections verbatim", () => {
+		const error = toORPCError("Command raw_file_download not found");
+
+		expect(error.code).toBe("INTERNAL_SERVER_ERROR");
+		expect(error.message).toBe("Command raw_file_download not found");
 	});
 });

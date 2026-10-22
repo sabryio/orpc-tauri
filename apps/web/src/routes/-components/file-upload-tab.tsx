@@ -243,7 +243,10 @@ export function FileUploadTab() {
 				toast.error(
 					isDefinedError(error)
 						? `Raw download failed: [${error.code}] ${error.message}`
-						: `Raw download failed: ${(error as any).message}`,
+						: `Raw download failed: ${
+								(error as any).message ||
+								JSON.stringify((error as any).data ?? error)
+							}`,
 				);
 			} else {
 				setRawDownload((prev) => ({ ...prev, status: "error" }));
