@@ -58,13 +58,12 @@
 		"test:watch": "vitest"
 	},
 	"peerDependencies": {
-		"@orpc/client": "^2.0.0-beta.46",
+		"@orpc/client": "2.0.0-beta.46",
 		"@tauri-apps/api": "^2.2.0",
 		"effect": "^4.0.0"
 	},
 	"devDependencies": {
 		"@effect/language-service": "^0.87.3",
-		"@orpc/client": "^2.0.0-beta.46",
 		"@tauri-apps/api": "^2.2.0",
 		"@types/node": "^26.6.4",
 		"effect": "^4.0.0",

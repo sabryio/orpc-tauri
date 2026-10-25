@@ -8,7 +8,7 @@
 		"./meta": "./src/meta.export.ts"
 	},
 	"dependencies": {
-		"@orpc/client": "npm:@orpc/client@^2.0.0-beta.46",
+		"@orpc/client": "npm:@orpc/client@2.0.0-beta.46",
 		"@tauri-apps/api": "npm:@tauri-apps/api@^2.2.0",
 		"effect": "npm:effect@^4.0.0"
 	},
