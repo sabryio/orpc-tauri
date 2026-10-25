@@ -39,6 +39,18 @@
 
 ## Installation
 
+### npm / Bun / pnpm (recommended for tsc-typed projects)
+
+```bash
+npm install orpc-tauri
+# or
+bun add orpc-tauri
+```
+
+The npm package ships compiled `.js` with a full `.d.ts` type channel from `dist/` — `tsc --noEmit` works with no shims. Peer dependencies (`@orpc/client`, `@tauri-apps/api`, `effect`) are resolved from **your** app's single copies, so `instanceof` checks and the `ORPCError` type universe stay shared between the link and your contract.
+
+### JSR / Deno
+
 ```bash
 # Using JSR (recommended)
 npx jsr add @sabryio/orpc-tauri
@@ -49,6 +61,8 @@ deno add jsr:@sabryio/orpc-tauri
 # Or with Bun
 bunx jsr add @sabryio/orpc-tauri
 ```
+
+The JSR channel delivers the original TypeScript sources (Deno-native). Node/Bun consumers who install through the JSR->npm proxy get the transpiled runtime, but the type story there is weaker — prefer the npm package when your project type-checks with `tsc`.
 
 ## Quick Start
 
