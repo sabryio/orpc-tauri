@@ -1,5 +1,5 @@
 import { asyncIteratorObject, oc } from "@orpc/contract";
-import { tauri } from "orpc-tauri/meta";
+import { tauri } from "@sabryio/orpc-tauri";
 import { z } from "zod";
 
 const PlanetSchema = z.object({

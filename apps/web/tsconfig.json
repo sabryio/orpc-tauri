@@ -13,5 +13,6 @@
       "@/*": ["./src/*"],
       "@tauri-orpc-contract/ui/*": ["../../packages/ui/src/*"]
     }
-  }
+  },
+  "include": ["src"]
 }
