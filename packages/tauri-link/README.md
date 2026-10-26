@@ -39,16 +39,6 @@
 
 ## Installation
 
-### npm / Bun / pnpm (recommended for tsc-typed projects)
-
-```bash
-npm install orpc-tauri
-# or
-bun add orpc-tauri
-```
-
-The npm package ships compiled `.js` with a full `.d.ts` type channel from `dist/` — `tsc --noEmit` works with no shims. Peer dependencies (`@orpc/client`, `@tauri-apps/api`, `effect`) are resolved from **your** app's single copies, so `instanceof` checks and the `ORPCError` type universe stay shared between the link and your contract.
-
 ### JSR / Deno
 
 ```bash
